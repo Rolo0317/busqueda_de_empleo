@@ -1,0 +1,75 @@
+{
+  "name": "William Danilo Solano Alvarez",
+  "email": "daniloalvarez1719@gmail.com",
+  "phone": "+57 320 391 4473",
+  "city": "Bogota, D.C.",
+  "country": "Colombia",
+  "document_type": "Cedula de ciudadania",
+  "document_number": "1000134338",
+  "minimum_salary_cop": 2500000,
+  "availability": {
+    "remote": true,
+    "hybrid": true,
+    "onsite": true,
+    "relocation": false,
+    "travel": true,
+    "start_immediately": true
+  },
+  "languages": {
+    "spanish": "Nativo",
+    "english": "A2"
+  },
+  "experience_years": {
+    "total": 5,
+    "data_analysis": 5,
+    "python": 5,
+    "sql": 5,
+    "power_bi": 4,
+    "excel": 5,
+    "javascript": 1,
+    "angular": 0,
+    "dotnet": 0,
+    "microservices": 0,
+    "leadership": 0,
+    "html": 1,
+    "css": 1,
+    "apis_rest": 1,
+    "full_stack": 1,
+    "react": 1,
+    "node": 1,
+    "docker": 1
+  },
+  "certifications": [
+    "Desarrollo Web Front-End HTML CSS JavaScript",
+    "Power BI Analisis y Visualizacion de Datos",
+    "Excel Avanzado",
+    "Ingles Basics I y II"
+  ],
+  "safe_booleans": {
+    "accept_data_processing": true,
+    "has_family_in_company": false,
+    "has_conflict_of_interest": false,
+    "has_disability": false,
+    "has_criminal_record": false,
+    "is_currently_student": false,
+    "education_completed": true
+  },
+  "short_texts": {
+    "motivation": "Me interesa aportar mi experiencia en desarrollo, analisis de datos y automatizacion para mejorar procesos, construir soluciones utiles y crecer profesionalmente con el equipo.",
+    "profile_summary": "Perfil Full Stack Developer y Data Analyst con experiencia en Python, SQL, Power BI, JavaScript, automatizacion, dashboards, APIs REST y analisis de informacion para toma de decisiones.",
+    "strengths": "Pensamiento analitico, resolucion de problemas, comunicacion efectiva, adaptabilidad, trabajo en equipo y orientacion a la mejora de procesos."
+  },
+  "never_answer_keywords": [
+    "eps",
+    "arl",
+    "fondo de pensiones",
+    "cesantias",
+    "embarazo",
+    "enfermedad",
+    "diagnostico",
+    "tratamiento medico",
+    "medicamento",
+    "deuda",
+    "cuenta bancaria"
+  ]
+}

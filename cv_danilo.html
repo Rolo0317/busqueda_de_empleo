@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CV - William Danilo Solano Álvarez</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',Arial,sans-serif;background:#f4f6f9;color:#222;font-size:14px;line-height:1.6}
+  .page{max-width:900px;margin:0 auto;background:#fff;display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+  .sidebar{background:#1a2332;color:#fff;padding:32px 20px;display:flex;flex-direction:column;gap:28px}
+  .avatar{width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff;margin:0 auto;border:3px solid #3b82f6}
+  .name-block{text-align:center}
+  .name-block h1{font-size:18px;font-weight:700;color:#fff;line-height:1.3}
+  .name-block h1 span{color:#3b82f6}
+  .name-block p{font-size:11px;color:#94a3b8;margin-top:4px}
+  .s-section h3{font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#3b82f6;font-weight:600;border-bottom:1px solid #2d3e55;padding-bottom:6px;margin-bottom:12px}
+  .contact-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:12px;color:#cbd5e1}
+  .contact-item .ico{width:16px;height:16px;flex-shrink:0;margin-top:2px;opacity:.8}
+  .skill-pill{display:inline-block;background:#2d3e55;color:#93c5fd;font-size:11px;padding:3px 9px;border-radius:20px;margin:3px 3px 3px 0}
+  .skill-main{background:#1d4ed8;color:#bfdbfe}
+  .lang-bar{margin-bottom:8px}
+  .lang-bar span{font-size:12px;color:#cbd5e1;display:block;margin-bottom:3px}
+  .bar{background:#2d3e55;height:5px;border-radius:3px}
+  .bar-fill{background:#3b82f6;height:5px;border-radius:3px}
+  .hobby-item{font-size:12px;color:#94a3b8;margin-bottom:4px}
+  .hobby-item::before{content:"▸ ";color:#3b82f6}
+  .main{padding:32px 28px;display:flex;flex-direction:column;gap:24px}
+  .headline{background:#f0f4ff;border-left:3px solid #3b82f6;padding:14px 16px;border-radius:0 8px 8px 0}
+  .headline p{font-size:13px;color:#374151;line-height:1.7}
+  .section h2{font-size:13px;text-transform:uppercase;letter-spacing:1.5px;color:#1d4ed8;font-weight:700;border-bottom:2px solid #e5e7eb;padding-bottom:6px;margin-bottom:16px}
+  .job{margin-bottom:20px;position:relative;padding-left:16px}
+  .job::before{content:"";position:absolute;left:0;top:6px;width:8px;height:8px;background:#3b82f6;border-radius:50%}
+  .job::after{content:"";position:absolute;left:3px;top:14px;width:2px;background:#e5e7eb;bottom:-12px}
+  .job:last-child::after{display:none}
+  .job-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px;margin-bottom:2px}
+  .job-title{font-weight:700;font-size:14px;color:#111}
+  .job-company{font-size:13px;color:#3b82f6;font-weight:600}
+  .job-date{font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:20px;white-space:nowrap}
+  .job ul{margin-top:6px;padding-left:0;list-style:none}
+  .job ul li{font-size:12.5px;color:#374151;margin-bottom:4px;padding-left:14px;position:relative}
+  .job ul li::before{content:"•";position:absolute;left:0;color:#3b82f6;font-weight:700}
+  .logro-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .logro-card{background:#f0f4ff;border-radius:8px;padding:12px 14px;border:1px solid #dbeafe}
+  .logro-card strong{font-size:15px;color:#1d4ed8;display:block;margin-bottom:2px}
+  .logro-card span{font-size:11.5px;color:#374151}
+  .edu-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 12px;border-radius:8px;background:#f9fafb;margin-bottom:8px;border:1px solid #e5e7eb}
+  .edu-title{font-weight:600;font-size:13px;color:#111}
+  .edu-inst{font-size:12px;color:#6b7280}
+  .edu-year{font-size:11px;color:#3b82f6;font-weight:600;white-space:nowrap}
+  .cert-link{font-size:11px;color:#3b82f6;text-decoration:none}
+  .cert-link:hover{text-decoration:underline}
+  .tech-grid{display:flex;flex-wrap:wrap;gap:7px}
+  .tech-tag{background:#f0f4ff;border:1px solid #bfdbfe;color:#1d4ed8;font-size:11.5px;padding:4px 11px;border-radius:20px;font-weight:500}
+  .ref-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px}
+  .ref-card strong{font-size:13px;color:#111}
+  .ref-card em{font-size:11px;color:#3b82f6;display:block;margin-bottom:6px}
+  .ref-card p{font-size:12px;color:#374151;font-style:italic}
+  @page{margin:10mm}
+  @media print{
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+    body{background:#fff!important}
+    .page{background:#fff!important;display:grid!important;grid-template-columns:260px 1fr!important;box-shadow:none}
+    .sidebar{background:#1a2332!important}
+    .avatar{background:linear-gradient(135deg,#3b82f6,#1d4ed8)!important}
+    .skill-pill{background:#2d3e55!important}
+    .skill-main{background:#1d4ed8!important}
+    .bar{background:#2d3e55!important}
+    .bar-fill{background:#3b82f6!important}
+    .headline{background:#f0f4ff!important}
+    .job::before{background:#3b82f6!important}
+    .job::after{background:#e5e7eb!important}
+    .job-date{background:#f3f4f6!important}
+    .logro-card{background:#f0f4ff!important}
+    .edu-item{background:#f9fafb!important}
+    .tech-tag{background:#f0f4ff!important}
+    .ref-card{background:#f9fafb!important}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div>
+    <div style="width:100px;height:100px;border-radius:50%;overflow:hidden;margin:0 auto;border:3px solid #3b82f6;flex-shrink:0">
+      <img src="foto_corporativa.jpeg" alt="William Danilo Solano" style="width:100%;height:100%;object-fit:cover;object-position:center top" onerror="this.parentElement.innerHTML='<div style=\'width:100%;height:100%;background:linear-gradient(135deg,#3b82f6,#1d4ed8);display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;color:#fff\'>WD</div>'">
+    </div>
+    <div class="name-block" style="margin-top:12px">
+      <h1>William Danilo<br><span>Solano Álvarez</span></h1>
+      <p>Full Stack Developer &amp; Data Analyst</p>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <h3>Contacto</h3>
+    <div class="contact-item">
+      <svg class="ico" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.95 12a19.79 19.79 0 01-3.07-8.67A2 2 0 012.85 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 8.64a16 16 0 006.29 6.29l1-.95a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      +57 320 391 4473
+    </div>
+    <div class="contact-item">
+      <svg class="ico" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      daniloalvarez1719@gmail.com
+    </div>
+    <div class="contact-item">
+      <svg class="ico" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Bogotá, D.C., Colombia
+    </div>
+    <div class="contact-item">
+      <svg class="ico" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+      linkedin.com/in/william-danilo-solano-alvarez
+    </div>
+    <div class="contact-item">
+      <svg class="ico" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      2 Sep 1999 · C.C. 1.000.134.338
+    </div>
+  </div>
+
+  <div class="s-section">
+    <h3>Habilidades técnicas</h3>
+    <span class="skill-pill skill-main">Python</span>
+    <span class="skill-pill skill-main">SQL</span>
+    <span class="skill-pill skill-main">Power BI</span>
+    <span class="skill-pill skill-main">JavaScript</span>
+    <span class="skill-pill">HTML / CSS</span>
+    <span class="skill-pill">Pandas · NumPy</span>
+    <span class="skill-pill">MySQL · PostgreSQL</span>
+    <span class="skill-pill">Redis</span>
+    <span class="skill-pill">Docker</span>
+    <span class="skill-pill">APIs REST</span>
+    <span class="skill-pill">Excel Avanzado</span>
+    <span class="skill-pill">IA Generativa</span>
+  </div>
+
+  <div class="s-section">
+    <h3>Idiomas</h3>
+    <div class="lang-bar">
+      <span>Español — Nativo</span>
+      <div class="bar"><div class="bar-fill" style="width:100%"></div></div>
+    </div>
+    <div class="lang-bar">
+      <span>Inglés — A2</span>
+      <div class="bar"><div class="bar-fill" style="width:30%"></div></div>
+    </div>
+  </div>
+
+  <div class="s-section">
+    <h3>Competencias</h3>
+    <div class="hobby-item">Pensamiento analítico</div>
+    <div class="hobby-item">Resolución de problemas</div>
+    <div class="hobby-item">Comunicación efectiva</div>
+    <div class="hobby-item">Optimización de procesos</div>
+    <div class="hobby-item">Trabajo en equipo</div>
+    <div class="hobby-item">Adaptabilidad</div>
+  </div>
+
+  <div class="s-section">
+    <h3>Intereses</h3>
+    <div class="hobby-item">Fútbol</div>
+    <div class="hobby-item">Guitarra</div>
+    <div class="hobby-item">Canto</div>
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<main class="main">
+
+  <!-- Perfil -->
+  <div class="headline">
+    <p>Perfil híbrido de <strong>Desarrollo Full Stack y Análisis de Datos</strong> con más de 5 años de experiencia en extracción, transformación y análisis de información, automatización con Python y creación de dashboards en Power BI para la toma de decisiones. Experiencia en desarrollo de páginas web y landing pages, integración con APIs REST, y uso de <strong>IA generativa</strong> aplicada para optimizar procesos y resultados de negocio.</p>
+  </div>
+
+  <!-- Logros -->
+  <div class="section">
+    <h2>Logros destacados</h2>
+    <div class="logro-grid">
+      <div class="logro-card">
+        <strong>40%</strong>
+        <span>Reducción en tiempos de reportería mediante automatización con Python y Excel</span>
+      </div>
+      <div class="logro-card">
+        <strong>Dashboards</strong>
+        <span>Desarrollo de tableros interactivos para toma de decisiones en tiempo real</span>
+      </div>
+      <div class="logro-card">
+        <strong>Multi-fuente</strong>
+        <span>Integración de datos garantizando calidad, trazabilidad y consistencia</span>
+      </div>
+      <div class="logro-card">
+        <strong>Insights</strong>
+        <span>Generación de insights estratégicos para optimización operativa y financiera</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Experiencia -->
+  <div class="section">
+    <h2>Experiencia profesional</h2>
+
+    <div class="job">
+      <div class="job-header">
+        <div>
+          <div class="job-title">Desarrollador Full Stack</div>
+          <div class="job-company">Arise Systems Firm S.A.S</div>
+        </div>
+        <span class="job-date">Abr 2026 – Actualidad</span>
+      </div>
+      <ul>
+        <li>Desarrollo y mantenimiento de sitios web y landing pages orientadas a conversión (front-end y back-end).</li>
+        <li>Implementación de funcionalidades full stack: formularios, autenticación y consumo de APIs REST.</li>
+        <li>Apoyo a iniciativas de marketing: seguimiento de campañas, medición de KPIs y optimización basada en datos.</li>
+        <li>Mejora de experiencia de usuario: diseño responsive, SEO técnico y optimización de rendimiento.</li>
+      </ul>
+    </div>
+
+    <div class="job">
+      <div class="job-header">
+        <div>
+          <div class="job-title">Data Analyst Jr · Torre de Control · Reporting</div>
+          <div class="job-company">GROUPCOS</div>
+        </div>
+        <span class="job-date">Mar 2020 – Mar 2026</span>
+      </div>
+      <ul>
+        <li>Automatización de reportería con Python y Excel; reducción del 40% en tiempos de proceso.</li>
+        <li>Desarrollo y mantenimiento de dashboards en Power BI con KPIs operativos y financieros.</li>
+        <li>Integración y transformación de datos desde MySQL y múltiples fuentes (ETL).</li>
+        <li>Monitoreo en tiempo real de operaciones (torre de control), identificando desviaciones y proponiendo acciones correctivas.</li>
+        <li>Análisis de tendencias, detección de anomalías y generación de reportes ejecutivos estratégicos.</li>
+        <li>Control de calidad de información y aseguramiento de la consistencia de los datos reportados.</li>
+      </ul>
+    </div>
+
+    <div class="job">
+      <div class="job-header">
+        <div>
+          <div class="job-title">Auxiliar de Ventas</div>
+          <div class="job-company">Éxito Américas</div>
+        </div>
+        <span class="job-date">Jun 2019 – Ene 2020</span>
+      </div>
+      <ul>
+        <li>Atención al cliente y gestión de ventas garantizando experiencia de compra eficiente.</li>
+        <li>Control de inventario, reposición y planometría estratégica de productos en punto de venta.</li>
+        <li>Implementación de estrategias de merchandising para mejorar visibilidad y fortalecer ventas.</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Educación -->
+  <div class="section">
+    <h2>Educación y formación</h2>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Técnico en Operaciones Comerciales y Financieras</div>
+        <div class="edu-inst">SENA</div>
+      </div>
+      <span class="edu-year">2019 – 2020</span>
+    </div>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Bachillerato Académico</div>
+        <div class="edu-inst">I.E.D. José Francisco Socarrás</div>
+      </div>
+      <span class="edu-year">2018</span>
+    </div>
+  </div>
+
+  <!-- Cursos y Certificaciones -->
+  <div class="section">
+    <h2>Cursos y certificaciones</h2>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Desarrollo Web Front-End (HTML, CSS, JavaScript)</div>
+        <div class="edu-inst">Universidad de los Andes · <a class="cert-link" href="https://rolo0317.github.io/portafolio-web/certificados/certificado_desarrollo_web_front-end.pdf" target="_blank">Ver certificado ↗</a></div>
+      </div>
+      <span class="edu-year">Oct 2025</span>
+    </div>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Power BI — Análisis y Visualización de Datos</div>
+        <div class="edu-inst">CET Colsubsidio</div>
+      </div>
+      <span class="edu-year">2024</span>
+    </div>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Inglés — Basics I y II</div>
+        <div class="edu-inst">CET Colsubsidio · <a class="cert-link" href="https://rolo0317.github.io/portafolio-web/certificados/certificado_english_basics_I.pdf" target="_blank">Cert. I ↗</a> &nbsp;·&nbsp; <a class="cert-link" href="https://rolo0317.github.io/portafolio-web/certificados/certificado_english_basics_II.pdf" target="_blank">Cert. II ↗</a></div>
+      </div>
+      <span class="edu-year">2022 – 2023</span>
+    </div>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Excel Avanzado — Hojas de Cálculo</div>
+        <div class="edu-inst">SENA / CET Colsubsidio</div>
+      </div>
+      <span class="edu-year">May 2022</span>
+    </div>
+    <div class="edu-item">
+      <div>
+        <div class="edu-title">Atención al Cliente — Nivel Avanzado</div>
+        <div class="edu-inst">SENA</div>
+      </div>
+      <span class="edu-year">Abr 2022</span>
+    </div>
+  </div>
+
+  <!-- Stack Técnico -->
+  <div class="section">
+    <h2>Stack tecnológico</h2>
+    <div class="tech-grid">
+      <span class="tech-tag">Python</span>
+      <span class="tech-tag">SQL</span>
+      <span class="tech-tag">JavaScript</span>
+      <span class="tech-tag">HTML5 / CSS3</span>
+      <span class="tech-tag">Power BI</span>
+      <span class="tech-tag">Excel Avanzado</span>
+      <span class="tech-tag">Pandas · NumPy · Matplotlib</span>
+      <span class="tech-tag">MySQL · PostgreSQL · Redis</span>
+      <span class="tech-tag">Docker</span>
+      <span class="tech-tag">APIs REST</span>
+      <span class="tech-tag">Git</span>
+      <span class="tech-tag">IA Generativa</span>
+    </div>
+  </div>
+
+  <!-- Referencia -->
+  <div class="section">
+    <h2>Referencia laboral</h2>
+    <div class="ref-card">
+      <strong>Daniel Alejandro Rincón Hernández</strong>
+      <em>Supervisor · Arise Systems Firm S.A.S · Abr 2026</em>
+      <p>"William es un buen elemento, un trabajador responsable, dedicado e inteligente. Tiene la capacidad de adaptarse a las problemáticas y encontrar la solución más óptima. Es un compañero solidario con su equipo de trabajo y posee sólidas bases de habilidades blandas."</p>
+    </div>
+  </div>
+
+</main>
+</div>
+</body>
+</html>
