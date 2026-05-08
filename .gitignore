@@ -1,0 +1,100 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+.env
+
+# Selenium/Browser
+chromedriver
+geckodriver
+edge_bot_profile/
+.cache/
+.selenium/
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Logs
+*.log
+logs/
+bot.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp
+*.tmp
+*.temp
+temp/
+
+# MySql/Database config (CRÍTICO - NUNCA EXPONER)
+.env
+.env.local
+.env.*.local
+config.local.js
+database.config.js
+
+# Secretos específicos
+edge_bot_profile/
+EDGE_BOT_USER_DATA_DIR/
+credentials.json
+secrets/
+
+# Resultados temporales
+*.xlsx
+*.csv
+temp_data/
+
+# Dashboard node_modules (ya está cubierto pero enfatizar)
+magneto_job_system/node_modules/
+magneto_job_system/dashboard/node_modules/
+
+# Job bot venv (ya está cubierto pero enfatizar)
+job_bot/.venv/
+job_bot/venv/
+
+# Archivos específicos de usuarios
+edge_user_data/
+chrome_user_data/
