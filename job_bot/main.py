@@ -43,15 +43,20 @@ def run_cycle(settings: Settings, platform: MagnetoPlatform, tracker: MySqlAppli
 
 def log_summary(summary: ApplicationSummary) -> None:
     logging.info(
-        "Resumen ciclo | revisadas=%s | aplicadas=%s | errores=%s | omitidas=%s",
+        "📊 RESUMEN CICLO | 👀 revisadas=%s | ✅ aplicadas=%s | ❌ errores=%s | ⏭️ omitidas=%s",
         summary.reviewed,
         summary.applied,
         summary.errors,
         summary.skipped,
     )
     print(
-        f"Resumen: {summary.reviewed} revisadas, "
-        f"{summary.applied} aplicadas, {summary.errors} errores, {summary.skipped} omitidas."
+        f"\n{'='*80}\n"
+        f"📊 RESUMEN CICLO:\n"
+        f"  👀 Ofertas revisadas: {summary.reviewed}\n"
+        f"  ✅ Postulaciones enviadas: {summary.applied}\n"
+        f"  ❌ Errores: {summary.errors}\n"
+        f"  ⏭️ Omitidas: {summary.skipped}\n"
+        f"{'='*80}\n"
     )
 
 
@@ -68,8 +73,8 @@ def main() -> None:
 
     try:
         wait = WebDriverWait(driver, max(20, settings.wait_seconds))
-        platform = MagnetoPlatform(driver=driver, wait=wait, settings=settings)
-        tracker = MySqlApplicationTracker(settings)
+        platform = MagnetoPlatform(driver=driver, wait=wait, settings=settings, tracker=tracker)
+        tracker.ensure_questions_table()
 
         logging.info("Verificando login inicial...")
         platform.ensure_logged_in()
@@ -117,6 +122,24 @@ def main() -> None:
             logging.info("✅ Driver de navegador cerrado")
         except Exception as cleanup_error:
             logging.error("Error al cerrar driver: %s", cleanup_error)
+        
+        # Mostrar resumen de preguntas aprendidas
+        try:
+            patterns = tracker.get_question_patterns()
+            if patterns:
+                logging.info("=" * 80)
+                logging.info("📚 PREGUNTAS FRECUENTES DETECTADAS (últimos 7 días):")
+                for pattern, stats in list(patterns.items())[:10]:
+                    logging.info(
+                        "  • %s... (veces=%s, confianza=%.2f%%)",
+                        pattern[:80],
+                        stats["count"],
+                        stats["avg_confidence"] * 100,
+                    )
+                logging.info("=" * 80)
+        except Exception as e:
+            logging.debug("Error obteniendo patrones de preguntas: %s", e)
+        
         logging.info("=" * 80)
         logging.info("Bot terminado. Ciclos completados: %d", cycle_count)
         logging.info("=" * 80)

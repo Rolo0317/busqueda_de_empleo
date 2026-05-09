@@ -40,11 +40,14 @@ class MagnetoPlatform(BasePlatform):
         (("acepta", "acepto", "certifica", "declara"), "Si"),
     ]
 
-    def __init__(self, driver: WebDriver, wait: WebDriverWait, settings: Settings) -> None:
+    def __init__(self, driver: WebDriver, wait: WebDriverWait, settings: Settings, tracker=None) -> None:
         self.driver = driver
         self.wait = wait
         self.settings = settings
+        self.tracker = tracker
         self.question_answerer = CandidateQuestionAnswerer(settings.candidate_profile_path)
+        if self.tracker:
+            self.tracker.ensure_questions_table()
 
     def ensure_logged_in(self) -> None:
         self.driver.get(f"{self.BASE_URL}/co")
@@ -226,21 +229,52 @@ class MagnetoPlatform(BasePlatform):
 
         for question in questions:
             decision = self.question_answerer.answer(question["text"], question["options"])
+            
             if not decision.should_answer or decision.value is None:
-                logging.info("Pregunta omitida | razon=%s | pregunta=%s", decision.reason, question["text"][:160])
+                logging.info(
+                    "❌ Pregunta omitida | razon=%s | pregunta=%s",
+                    decision.reason,
+                    question["text"][:160],
+                )
+                # Registrar en BD incluso si se omite
+                if self.tracker:
+                    try:
+                        self.tracker.record_question(
+                            question["text"][:500],
+                            f"[OMITIDA] {decision.reason}",
+                            decision.confidence
+                        )
+                    except Exception as e:
+                        logging.debug("Error registrando pregunta omitida: %s", e)
                 continue
 
             if self._answer_question_element(question["element"], decision.value):
                 logging.info(
-                    "Pregunta respondida | respuesta=%s | confianza=%.2f | razon=%s | pregunta=%s",
+                    "✅ Pregunta respondida | respuesta=%s | confianza=%.2f | razon=%s | pregunta=%s",
                     decision.value,
                     decision.confidence,
                     decision.reason,
                     question["text"][:160],
                 )
+                
+                # Registrar pregunta respondida en BD
+                if self.tracker:
+                    try:
+                        self.tracker.record_question(
+                            question["text"][:500],
+                            str(decision.value)[:200],
+                            decision.confidence
+                        )
+                    except Exception as e:
+                        logging.debug("Error registrando pregunta: %s", e)
+                
                 answered = True
             else:
-                logging.info("No se pudo aplicar respuesta | respuesta=%s | pregunta=%s", decision.value, question["text"][:160])
+                logging.warning(
+                    "⚠️ No se pudo aplicar respuesta | respuesta=%s | pregunta=%s",
+                    decision.value,
+                    question["text"][:160],
+                )
 
         return answered
 

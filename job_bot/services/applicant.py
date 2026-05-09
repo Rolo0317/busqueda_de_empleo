@@ -13,6 +13,8 @@ class ApplicationSummary:
         self.applied = 0
         self.errors = 0
         self.skipped = 0
+        self.questions_answered = 0
+        self.questions_skipped = 0
 
 
 class JobApplicant:
