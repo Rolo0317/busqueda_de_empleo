@@ -196,6 +196,80 @@ class MySqlApplicationTracker:
             return "No disponible para aplicar"
         return "Revisar error"
 
+    def record_question(self, question: str, answer: str, confidence: float, job_id: int | None = None) -> None:
+        """Guardar pregunta respondida en la BD para análisis posterior."""
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                INSERT INTO questions (question_text, answer_given, confidence_score, job_id)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (question, answer, confidence, job_id),
+            )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
+
+    def get_question_patterns(self) -> dict[str, dict]:
+        """Obtener patrones de preguntas frecuentes para optimizar respuestas."""
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                SELECT 
+                    SUBSTRING_INDEX(question_text, '?', 1) AS pattern,
+                    COUNT(*) as count,
+                    AVG(confidence_score) as avg_confidence
+                FROM questions
+                WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+                GROUP BY pattern
+                ORDER BY count DESC
+                LIMIT 20
+                """
+            )
+            patterns = {}
+            for row in cursor.fetchall():
+                patterns[row[0]] = {
+                    "count": row[1],
+                    "avg_confidence": row[2]
+                }
+            return patterns
+        finally:
+            cursor.close()
+            connection.close()
+
+    def ensure_questions_table(self) -> None:
+        """Crear tabla de preguntas si no existe."""
+        connection = self._connect()
+        try:
+            cursor = connection.cursor()
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS questions (
+                    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+                    job_id BIGINT UNSIGNED NULL,
+                    question_text VARCHAR(1000) NOT NULL,
+                    answer_given VARCHAR(500) NOT NULL,
+                    confidence_score DECIMAL(3,2) NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL,
+                    INDEX idx_created_at (created_at),
+                    INDEX idx_question_text (question_text(100))
+                )
+                """
+            )
+            connection.commit()
+        finally:
+            cursor.close()
+            connection.close()
+
     @staticmethod
     def _append_notes(description: str, notes: str) -> str:
         if not notes:
