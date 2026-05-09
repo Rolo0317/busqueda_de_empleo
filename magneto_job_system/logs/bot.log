@@ -1,0 +1,36 @@
+{"timestamp":"2026-05-08T18:32:43.911Z","level":"error","message":"Database initialization failed","meta":{"error":"Access denied for user 'root'@'localhost' (using password: NO)"}}
+{"timestamp":"2026-05-08T18:33:21.738Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:36:12.517Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:36:12.522Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T18:36:37.574Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:36:37.577Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T18:37:02.402Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:37:34.732Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:37:34.736Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T18:38:25.100Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:38:25.104Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T18:38:27.960Z","level":"error","message":"Dashboard data failed","meta":{"error":"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'high_priority\n    FROM jobs' at line 5"}}
+{"timestamp":"2026-05-08T18:39:48.522Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T18:39:48.525Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T18:47:28.770Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T18:47:38.379Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T18:47:47.658Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T18:48:09.997Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T18:51:14.763Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T18:52:33.549Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:18:05.462Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T19:18:05.467Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T19:18:09.295Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:18:22.540Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:20:26.843Z","level":"info","message":"MySQL schema initialized","meta":{}}
+{"timestamp":"2026-05-08T19:20:26.847Z","level":"info","message":"Dashboard running at http://localhost:3000","meta":{}}
+{"timestamp":"2026-05-08T19:20:29.197Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:39:10.609Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:42:50.579Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:57:01.436Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:57:02.507Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T19:57:03.336Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-08T21:10:34.598Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-09T00:01:36.679Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-09T00:02:07.952Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}
+{"timestamp":"2026-05-09T06:24:34.911Z","level":"error","message":"Logs query failed","meta":{"error":"Incorrect arguments to mysqld_stmt_execute"}}

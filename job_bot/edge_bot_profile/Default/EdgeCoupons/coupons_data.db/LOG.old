@@ -1,0 +1,11 @@
+2026/05/08-11:09:18.772 70b8 Reusing MANIFEST C:\Users\millo\Downloads\hoja de vida\job_bot\edge_bot_profile\Default\EdgeCoupons/coupons_data.db/MANIFEST-000001
+2026/05/08-11:09:18.773 70b8 Recovering log #11
+2026/05/08-11:09:18.774 70b8 Reusing old log C:\Users\millo\Downloads\hoja de vida\job_bot\edge_bot_profile\Default\EdgeCoupons/coupons_data.db/000011.log 
+2026/05/08-11:09:18.774 1830 Compacting 4@0 + 0@1 files
+2026/05/08-11:09:18.781 1830 Generated table #14@0: 4 keys, 682271 bytes
+2026/05/08-11:09:18.781 1830 Compacted 4@0 + 0@1 files => 682271 bytes
+2026/05/08-11:09:18.783 1830 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/05/08-11:09:18.784 1830 Delete type=2 #3
+2026/05/08-11:09:18.784 1830 Delete type=2 #6
+2026/05/08-11:09:18.784 1830 Delete type=2 #9
+2026/05/08-11:09:18.784 1830 Delete type=2 #12
