@@ -6,6 +6,8 @@ from platforms.base import BasePlatform
 from services.analyzer import OfferAnalyzer
 from services.tracker import ApplicationTracker
 
+from core.url_utils import canonicalize_url
+
 
 class ApplicationSummary:
     def __init__(self) -> None:
