@@ -1,0 +1,1013 @@
+{
+  "project_overview": {
+    "name": "Job Bot - Magneto365 Employment Bot",
+    "components": [
+      "Python Selenium/Direct Implementation (job_bot/)",
+      "Node.js Playwright-based Implementation (magneto_job_system/)",
+      "MySQL Database",
+      "Express Dashboard"
+    ],
+    "architecture_pattern": "Dual monolithic bots with shared database"
+  },
+  "1_ESTRUCTURA_COMPLETA": {
+    "arquitectura_actual": {
+      "pattern": "MONOLITHIC_DUAL_IMPLEMENTATION",
+      "description": "Dos bots independientes (Python y Node.js) hacen lo mismo sin compartir código",
+      "issues": [
+        {
+          "severity": "CRÍTICO",
+          "issue": "Duplicación total de lógica",
+          "python_file": "job_bot/services/analyzer.py",
+          "node_file": "magneto_job_system/services/scoringService.js",
+          "code_sample": {
+            "python": "skill_map = { 'react': years.get('react'), 'node': years.get('node'), ... }",
+            "javascript": "const skill_map = { 'react': years.react, 'node': years.node, ... }",
+            "impact": "Cambios a la lógica de scoring deben hacerse en 2 lugares. Inconsistencias garantizadas"
+          }
+        },
+        {
+          "severity": "ALTO",
+          "issue": "Acoplamiento fuerte con Magneto365",
+          "description": "Lógica de scraping acoplada con lógica de scoring y aplicación",
+          "locations": [
+            "job_bot/platforms/magneto.py - 700+ líneas",
+            "magneto_job_system/scrapers/magnetoScraper.js - 300+ líneas"
+          ],
+          "problem": "No se puede cambiar la estrategia de scraping sin afectar toda la aplicación"
+        }
+      ]
+    },
+    "patrones_diseño": {
+      "buenos": [
+        {
+          "pattern": "Strategy Pattern",
+          "location": "job_bot/platforms/base.py + magneto.py",
+          "description": "BasePlatform abstrae la interfaz de scraping"
+        },
+        {
+          "pattern": "Data Classes",
+          "location": "job_bot/models/job_offer.py",
+          "description": "JobOffer usa Pydantic para validación"
+        }
+      ],
+      "malos": [
+        {
+          "pattern": "GOD_OBJECT",
+          "severity": "CRÍTICO",
+          "files": [
+            "job_bot/platforms/magneto.py (600+ líneas)",
+            "job_bot/services/question_answerer.py (500+ líneas)"
+          ],
+          "responsibilities": [
+            "Web scraping",
+            "XPath construction",
+            "JavaScript execution",
+            "Form filling",
+            "Login handling",
+            "Question answering decision making"
+          ]
+        },
+        {
+          "pattern": "TIGHT_COUPLING",
+          "location": "main.py",
+          "code": "tracker = MySqlApplicationTracker(settings)\nplatform = MagnetoPlatform(driver=driver, wait=wait, settings=settings, tracker=tracker)",
+          "issue": "MagnetoPlatform conoce detalles de MySqlApplicationTracker"
+        }
+      ]
+    },
+    "acoplamiento_entre_modulos": {
+      "nivel": "ALTO",
+      "finding": [
+        {
+          "módulos": ["main.py", "magneto.py", "question_answerer.py", "tracker.py"],
+          "tipo": "Circular dependencies potencial",
+          "flow": "main -> platform -> question_answerer -> profile.json; platform -> tracker"
+        },
+        {
+          "problema": "question_answerer cargado cada vez que se abre una oferta",
+          "location": "magneto.py línea ~320: self.question_answerer = CandidateQuestionAnswerer(...)",
+          "impacto": "I/O overhead: lee profile.json 1000+ veces por ciclo"
+        },
+        {
+          "problema": "question_answerer usa métodos estáticos que hacen it difícil de mockear",
+          "location": "question_answerer.py líneas 420-450",
+          "código": "@staticmethod\ndef _normalize(value: str) -> str:\n    # Lógica de normalización",
+          "impacto": "Testing difícil; imposible cambiar comportamiento en runtime"
+        }
+      ]
+    },
+    "deuda_técnica": {
+      "score": "CRÍTICO",
+      "items": [
+        {
+          "tipo": "TECHNICAL_DEBT",
+          "descripción": "Hardcoded XPath queries",
+          "location": "magneto.py líneas 60-90",
+          "ejemplos": [
+            "JOB_LINK_XPATH = \"//a[contains(@href, '/empleos/')]\"",
+            "LOGIN_LINK_XPATH = \"//*[self::a or self::button][contains(translate...\"",
+            "APPLY_BUTTON_XPATH = mucho más complejo"
+          ],
+          "riesgo": "Break si Magneto cambia HTML incluso mínimamente",
+          "líneas_de_código": ">1000 caracteres en un solo XPath"
+        },
+        {
+          "tipo": "NO_ABSTRACTION",
+          "descripción": "JavaScript inyectado directamente en Python",
+          "location": "magneto.py líneas 331-430 (_extract_visible_questions)",
+          "tamaño": "~500 líneas de JavaScript en string Python",
+          "problema": "Sin syntax highlighting, difícil de debuggear"
+        },
+        {
+          "tipo": "INCONSISTENT_PATTERNS",
+          "descripción": "Database handling sin abstracción consistente",
+          "locations": [
+            "tracker.py: usa mysql.connector directo",
+            "jobRepository.js: usa mysql2/promise"
+          ],
+          "issue": "Error handling inconsistente entre implementations"
+        },
+        {
+          "tipo": "ANCIENT_CONFIG_PATTERN",
+          "descripción": "Settings loads from multiple .env files",
+          "location": "config.py lines 36-41",
+          "código": "env_files = (\n    base_path.parent / '.env',\n    base_path.parent / 'magneto_job_system' / '.env',\n    base_path / '.env',\n)",
+          "issue": "Order matters; confuso cuál .env se usa"
+        }
+      ]
+    },
+    "memory_leaks": {
+      "encontrados": [
+        {
+          "severity": "ALTO",
+          "location": "magneto.py - method _extract_visible_questions()",
+          "problema": "WebDriver.execute_script() mantiene referencias a elementos grandes",
+          "código": "return list(self.driver.execute_script(script) or [])",
+          "issue": "Elements del script JavaScript mantienen referencias en memoria después de retornar",
+          "fix": "Usar explicit cleanup o generator functions"
+        },
+        {
+          "severity": "MEDIO",
+          "location": "runner.js - startBot()",
+          "problema": "Browser context nunca se cierra",
+          "código": "const context = await launchPersistentBrowser();\n// ... forever loop con setInterval\n// context.close() nunca se llama",
+          "issue": "Infinite accumulation de pages en context"
+        },
+        {
+          "severity": "MEDIO",
+          "location": "tracker.py - MySqlApplicationTracker",
+          "problema": "Connection pooling sin límite explícito",
+          "código": "connection = self._connect()  # Nueva conexión cada vez\n# ... uso\nfinally:\n    cursor.close()\n    connection.close()",
+          "issue": "Si hay excepciones en transacciones largas, connections pueden no cerrar limpiamente"
+        }
+      ]
+    },
+    "race_conditions": [
+      {
+        "severity": "CRÍTICO",
+        "location": "runner.js - runBotCycle()",
+        "código": "if (isRunning) {\n    logger.warn('Previous cycle still running. Skipping this tick.');\n    return;\n}\nisRunning = true;\n// ... async work\nisRunning = false;",
+        "problema": "Race condition con flag booleano simple",
+        "escenario": "Si una promesa rechaza después de 'isRunning = true' pero antes de 'isRunning = false', el bot se congela",
+        "evidencia": "Falta try-finally para resetear flag"
+      },
+      {
+        "severity": "ALTO",
+        "location": "tracker.py - record() method",
+        "problema": "Multiple database queries sin transacción",
+        "código": "connection = self._connect()\nself._upsert_company(cursor, offer.company)\njob_id = self._upsert_job(...)\nself._sync_skills(cursor, job_id, ...)\nself._record_application(cursor, job_id, ...)\nconnection.commit()",
+        "issue": "Si _sync_skills falla, la aplicación se graba parcialmente. Rollback existe pero incompleto",
+        "detalle": "Múltiples cursores compartiendo una conexión"
+      },
+      {
+        "severity": "ALTO",
+        "location": "magneto.py - _answer_visible_questions()",
+        "problema": "Múltiples preguntas respondidas secuencialmente sin sincronización",
+        "código": "for question in questions:\n    decision = self.question_answerer.answer(...)\n    self._answer_question_element(question['element'], ...)\n    sleep(1)",
+        "issue": "Si sleep(1) ocurre durante transición de página, next question puede ser del formulario anterior"
+      }
+    ],
+    "bottlenecks": [
+      {
+        "tipo": "BLOCKING_SLEEP",
+        "severity": "ALTO",
+        "location": "main.py lines 96-97",
+        "código": "sleep(settings.loop_interval_seconds)  # Default 300 segundos",
+        "impacto": "Bot bloqueado 5 minutos entre ciclos; no puede responder a interrupts"
+      },
+      {
+        "tipo": "SLOW_JAVASCRIPT_EXTRACTION",
+        "severity": "ALTO",
+        "location": "magneto.py lines 331-430",
+        "problema": "JavaScript gigante para extraer preguntas ejecutado por cada formulario",
+        "complejidad": "O(n²) en cantidad de elementos del DOM",
+        "impacto": "Puede tomar 10-30 segundos extraer 10 preguntas"
+      },
+      {
+        "tipo": "DATABASE_N_PLUS_1",
+        "severity": "CRÍTICO",
+        "location": "tracker.py - _sync_skills()",
+        "código": "for skill in skills:\n    cursor.execute('INSERT INTO skills...')\n    cursor.execute('SELECT id FROM skills...')\n    cursor.execute('INSERT INTO job_skills...')",
+        "detalle": "3 queries por skill; si hay 20 skills = 60 queries",
+        "fix": "Batch insert o bulk operations"
+      },
+      {
+        "tipo": "REPEATED_PROFILE_LOADS",
+        "severity": "MEDIO",
+        "location": "magneto.py line 320",
+        "código": "self.question_answerer = CandidateQuestionAnswerer(settings.candidate_profile_path)",
+        "impacto": "Profile JSON cargado en CADA nueva MagnetoPlatform instance",
+        "problema": "Instancia creada por cada ciclo del bot en main.py"
+      }
+    ]
+  },
+  "2_CODIGO_CRITICO": {
+    "funciones_exceden_50_lineas": [
+      {
+        "archivo": "job_bot/platforms/magneto.py",
+        "función": "_extract_visible_questions()",
+        "líneas": "~500",
+        "severidad": "CRÍTICO",
+        "problema": "Gigantesco JavaScript inyectado en Python"
+      },
+      {
+        "archivo": "job_bot/platforms/magneto.py",
+        "función": "_complete_application_flow()",
+        "líneas": "~80",
+        "severidad": "ALTO",
+        "complejidad": "Difícil de seguir con múltiples loops anidados"
+      },
+      {
+        "archivo": "job_bot/platforms/magneto.py",
+        "función": "apply()",
+        "líneas": "~60",
+        "severidad": "ALTO",
+        "problema": "Mezclado scraping con aplicación logic"
+      },
+      {
+        "archivo": "job_bot/services/question_answerer.py",
+        "función": "answer()",
+        "líneas": "~70",
+        "severidad": "ALTO",
+        "problema": "Cascada de if-else sin estrategia clara"
+      },
+      {
+        "archivo": "job_bot/services/question_answerer.py",
+        "función": "_answer_boolean()",
+        "líneas": "~80",
+        "severidad": "CRÍTICO",
+        "problema": "Hardcoded rules en lista gigante de tuples"
+      }
+    ],
+    "duplicacion_codigo": {
+      "crítica": [
+        {
+          "tipo": "SKILL_MATCHING_LOGIC",
+          "python": "job_bot/services/analyzer.py - _matches_skill()",
+          "javascript": "magneto_job_system/services/scoringService.js - matchesSkill()",
+          "diferencias": "Python usa regex compiladas; JS usa literales",
+          "mantenibilidad": "Imposible mantener sincronizados"
+        },
+        {
+          "tipo": "QUESTION_ANSWERING_RULES",
+          "python": "job_bot/services/question_answerer.py - reglas de skills",
+          "javascript": "No existe en Node.js bot",
+          "impacto": "Funcionalidad incompleta en JS"
+        },
+        {
+          "tipo": "SALARY_EXTRACTION",
+          "python": "_salary_value() en analyzer.py y question_answerer.py",
+          "javascript": "salaryValue() en scoringService.js",
+          "problema": "3 implementaciones diferentes del mismo algoritmo"
+        }
+      ]
+    },
+    "antipatterns": [
+      {
+        "tipo": "FEATURE_ENVY",
+        "location": "MagnetoPlatform class",
+        "problema": "Accede excesivamente a question_answerer.profile",
+        "ejemplo": "self.question_answerer.profile.get('experience_years')"
+      },
+      {
+        "tipo": "MAGIC_NUMBERS",
+        "locations": [
+          "magneto.py: 12 iteraciones en _complete_application_flow()",
+          "magneto.py: login_wait_seconds = 180 hardcoded",
+          "scrapermagnetoScraper.js: for loops con números literales"
+        ]
+      },
+      {
+        "tipo": "POOR_ERROR_NAMING",
+        "location": "magneto.py _click_button_by_text()",
+        "problema": "Retorna bool True/False sin contexto de qué botón fue clickeado"
+      },
+      {
+        "tipo": "DEFENSIVE_PROGRAMMING_GONE_WRONG",
+        "location": "magneto.py - múltiples try-except con pass silencioso",
+        "código": "try:\n    ...\nexcept Exception:\n    logging.info('No fue posible...')  # Silenciosamente continúa",
+        "problema": "Bugs que deberían fallar pasan silenciosamente"
+      }
+    ],
+    "error_handling_incompleto": [
+      {
+        "severity": "CRÍTICO",
+        "location": "main.py - línea 55",
+        "código": "tracker = MySqlApplicationTracker(settings)\nplatform = MagnetoPlatform(...)",
+        "problema": "No hay validación de que database esté disponible",
+        "escenario": "Si MySQL no está corriendo, bot crashes sin mensaje claro"
+      },
+      {
+        "severity": "ALTO",
+        "location": "tracker.py - get_seen_urls()",
+        "código": "connection = self._connect()  # Si falla, qué pasa?",
+        "falta": "No hay reintentos ni fallback"
+      },
+      {
+        "severity": "ALTO",
+        "location": "magneto.py - _wait_for_application_panel()",
+        "código": "WebDriverWait(self.driver, 8).until(...)\nexcept TimeoutException:\n    logging.info('No aparecio panel...')\n    # Continúa como si nada pasara",
+        "problema": "Silently continues si el panel nunca aparece"
+      },
+      {
+        "severity": "MEDIO",
+        "location": "question_answerer.py - answer()",
+        "problema": "Profile file puede no existir o ser inválido JSON",
+        "código": "if not profile_path.exists():\n    return {}\n# Pero luego code assume profile tiene cierta estructura",
+        "falta": "Default values para el profile"
+      }
+    ],
+    "configuracion_hardcodeada": [
+      {
+        "tipo": "HARDCODED_XPATHS",
+        "cantidad": ">10",
+        "ubicación": "magneto.py líneas 40-65",
+        "ejemplos": [
+          "LOGIN_LINK_XPATH con translate() monstruoso",
+          "APPLY_BUTTON_XPATH con múltiples alternativas",
+          "JOB_LINK_XPATH simple pero hardcoded"
+        ],
+        "riesgo": "Alto"
+      },
+      {
+        "tipo": "HARDCODED_WAIT_TIMES",
+        "ejemplos": [
+          "login_wait_seconds: 180",
+          "loop_interval_seconds: 300",
+          "humanDelay(page, 400, 1200)",
+          "_wait_for_application_panel timeout: 8 segundos"
+        ],
+        "problema": "No configurable; puede fallar si Magneto es lento"
+      },
+      {
+        "tipo": "HARDCODED_PATTERNS",
+        "location": "question_answerer.py - _answer_boolean()",
+        "código": "if ('inglés', 'b2', 'c1', 'c2', 'avanzado'...) in question",
+        "problema": "Qué si el candidato es bilingüe desde nacimiento?"
+      },
+      {
+        "tipo": "HARDCODED_SKILL_MAPPING",
+        "files": [
+          "question_answerer.py - skill_map dict",
+          "analyzer.py - explicitpatterns dict",
+          "scoringService.js - explicitPatterns"
+        ],
+        "problema": "No se puede agregar nuevas skills sin código change"
+      }
+    ],
+    "manejo_recursos": [
+      {
+        "tipo": "WEBDRIVER_LIFECYCLE",
+        "severity": "CRÍTICO",
+        "location": "main.py lines 89-115",
+        "problemas": [
+          "create_browser_driver() no tiene timeout",
+          "driver.quit() solo se llama en finally, pero si hay KeyboardInterrupt puede no ejecutarse",
+          "WebDriverWait creado sin consideración a limpieza"
+        ],
+        "código": "finally:\n    try:\n        driver.quit()  # Bueno pero tardío\n    except Exception as cleanup_error:\n        logging.error(...)"
+      },
+      {
+        "tipo": "DATABASE_CONNECTION_POOLING",
+        "severity": "ALTO",
+        "location": "tracker.py - MySqlApplicationTracker",
+        "problema": "Crea nueva conexión por cada operación",
+        "código": "def get_seen_urls(self) -> set[str]:\n    connection = self._connect()\n    # ... solo una query\n    connection.close()",
+        "mejora": "Reutilizar pool o mantener conexión abierta"
+      },
+      {
+        "tipo": "FILE_HANDLE_LEAKS",
+        "severity": "MEDIO",
+        "location": "question_answerer.py - _load_profile()",
+        "código": "return json.loads(profile_path.read_text(encoding='utf-8'))",
+        "problema": "Nunca falla pero sí consume recursos si hay miles de llamadas"
+      }
+    ]
+  },
+  "3_IA_LLM_ANALYSIS": {
+    "question_answerer_escalabilidad": {
+      "score": "BAJO",
+      "problemas": [
+        {
+          "tipo": "RULE_BASED_HARDCODED",
+          "problema": "Sistema completamente regla-basado, no ML",
+          "escalabilidad": "Cada nueva regla requiere cambio de código",
+          "ejemplo": "Para soportar 'Has trabajado en DevOps?' necesita agregar línea en _answer_boolean()"
+        },
+        {
+          "tipo": "MONOLITHIC_RULES",
+          "location": "question_answerer.py - tuples gigantes",
+          "código": "rules = [\n    (('tratamiento de datos', ...), safe_booleans.get('accept_data_processing'), 'Autorizacion de datos'),\n    ...  # 15+ reglas\n]",
+          "problema": "O(n) pattern matching por pregunta"
+        },
+        {
+          "tipo": "HARDCODED_THRESHOLDS",
+          "ejemplos": [
+            "confidence = 0.95 for data processing",
+            "confidence = 0.9 for technology boolean",
+            "confidence = 0.8 for text answers"
+          ],
+          "issue": "No se adapta a precisión real del bot"
+        },
+        {
+          "tipo": "NO_LEARNING",
+          "problema": "El bot NO aprende de preguntas nuevas",
+          "evidencia": "Tabla 'questions' se llena pero nunca se usa para entrenar",
+          "potencial": "Podría usar question patterns para mejorar"
+        }
+      ],
+      "escalabilidad_estimada": "MÁXIMO 500 preguntas únicas antes de ser imposible de mantener"
+    },
+    "scoring_precision": {
+      "score": "MEDIO",
+      "problemas": [
+        {
+          "tipo": "SIMPLISTIC_SCORING",
+          "algoritmo": "Puntos basados en presencia de keywords",
+          "ejemplos": [
+            "base_score = 25",
+            "skills * 8 = máx 40",
+            "location = +10",
+            "remote/hybrid = +10",
+            "seniority = +5"
+          ],
+          "total": "100 puntos max"
+        },
+        {
+          "tipo": "MISSING_FACTORS",
+          "no_considerados": [
+            "Company reputation",
+            "Career growth potential",
+            "Team size/culture fit",
+            "Technology stack evolution",
+            "Contract type (indefinido vs temporal)"
+          ],
+          "impacto": "Scoring sesgado hacia skills, ignora contexto"
+        },
+        {
+          "tipo": "NAIVE_SKILL_MATCHING",
+          "location": "analyzer.py - _matches_skill()",
+          "ejemplos": [
+            "Busca 'React' así que '/empleos/reactjs' NO MATCHEA",
+            "Busca 'Python' así que 'Ironpython' NO MATCHEA",
+            "Busca 'Full Stack' solo si exacta, variaciones 'fullstack' pueden fallar"
+          ]
+        },
+        {
+          "tipo": "SALARY_PARSING_FRAGILE",
+          "código": "numbers = re.findall(r'\\d[\\d.,]*', salary)\nreturn max(numbers, default=0)",
+          "problemas": [
+            "\"$2.500.000 - $4.500.000\" retorna 4500000 no 3.5M promedio",
+            "\"$2k - $4k USD\" podría fallar",
+            "\"Convenir\" retorna 0 pero es aceptado en config"
+          ]
+        }
+      ]
+    },
+    "prompts_quality": {
+      "tipo": "NO_LLM_PROMPTS",
+      "descripción": "El proyecto NO usa LLMs/IA; es 100% regla-basado",
+      "evidencia": "Ninguna mención de OpenAI, Anthropic, Hugging Face",
+      "oportunidad": "Podría usar LLM para:",
+      "mejoras_potenciales": [
+        {
+          "use_case": "Job description understanding",
+          "prompt_template": "Extrae título, habilidades requeridas, nivel de seniority del: {job_description}",
+          "beneficio": "Mejor parsing que regex"
+        },
+        {
+          "use_case": "Question understanding",
+          "prompt_template": "¿Esta pregunta es sobre {category}?: {question}",
+          "beneficio": "Categorizar preguntas automáticamente"
+        },
+        {
+          "use_case": "Answer generation",
+          "prompt_template": "Genera respuesta corta y profesional para: {question}",
+          "beneficio": "Respuestas más naturales que lookup tables"
+        }
+      ]
+    },
+    "hallucinations_risks": {
+      "nivel": "NO_LLM",
+      "pero_riesgos_existen": [
+        {
+          "tipo": "REGEX_FALSE_POSITIVES",
+          "ejemplo": "Busca 'Node' y matchea 'Nodo magnético' en descripción",
+          "severidad": "BAJO"
+        },
+        {
+          "tipo": "OVER_CONFIDENT_ANSWERS",
+          "problema": "Bot contesta preguntas con confidence 0.95 que luego resultan incorrectas",
+          "ejemplo": "Responde 'Si, tengo experiencia en DevOps' pero candidato nunca trabajó en eso",
+          "causa": "Regla matched pero es falso positivo"
+        },
+        {
+          "tipo": "PROFILE_MISMATCH",
+          "problema": "Si profile.json es incorrecto, bot responde incorrectamente",
+          "ejemplo": "experience_years.react = 5 pero es realmente 1",
+          "severidad": "ALTO"
+        }
+      ]
+    },
+    "token_usage": {
+      "tipo": "NO_APLICABLE",
+      "descripción": "No hay LLM usage. Si fuera a agregarse:"
+    }
+  },
+  "4_SCRAPING_ANALYSIS": {
+    "selenium_usage": {
+      "nivel": "COMPLEJO",
+      "problemas": [
+        {
+          "severity": "CRÍTICO",
+          "tipo": "MASSIVE_JAVASCRIPT_INJECTION",
+          "location": "magneto.py lines 331-430",
+          "tamaño": "~500 líneas de JS en string Python",
+          "problemas": [
+            "Sin syntax highlighting",
+            "Difícil de debuggear",
+            "El script tiene bugs (typos potenciales)"
+          ],
+          "recomendación": "Extraer a archivo .js separado"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "BRITTLE_XPATHS",
+          "ejemplos": [
+            "//a[contains(@href, '/empleos/')]  - Simple pero asume estructura",
+            "//*[self::a or self::button][contains(translate...) - Monstruo de XPath",
+            "./ancestor::*[self::article or self::li or self::div][.//a[contains(@href, '/empleos/')]][1] - Complejo"
+          ],
+          "riesgo": "Si Magneto refactoriza HTML, todos fallan simultáneamente"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "WAIT_CONDITIONS_FRAGILE",
+          "location": "magneto.py - multiple wait calls",
+          "ejemplos": [
+            "lambda driver: len(driver.find_elements(...)) > 0 - Qué si hay 0?",
+            "WebDriverWait with hardcoded 8-20 segundos"
+          ],
+          "problema": "Timeouts inconsistentes según condición de red"
+        }
+      ]
+    },
+    "anti_bot_risks": {
+      "nivel": "MEDIO_ALTO",
+      "riesgos": [
+        {
+          "tipo": "USER_AGENT_DETECTION",
+          "severidad": "MEDIO",
+          "risk": "Selenium se detecta fácilmente",
+          "evidence": "chromium.launchPersistentContext no tiene user-agent override",
+          "mitigación_parcial": "--disable-blink-features=AutomationControlled en args"
+        },
+        {
+          "tipo": "BEHAVIORAL_DETECTION",
+          "severidad": "ALTO",
+          "behaviors": [
+            "El bot SIEMPRE clickea 'Aplicar' en misma posición",
+            "SIEMPRE espera exactamente sleep(settings.wait_seconds) segundos",
+            "NUNCA scroll de más, NUNCA mueve mouse aleatoriamente",
+            "Formularios completados en tiempo humano imposible"
+          ]
+        },
+        {
+          "tipo": "IP_REPUTATION",
+          "severidad": "BAJO_MEDIO",
+          "problema": "Si corre desde same IP, múltiples aplicaciones pueden ser flaggeadas",
+          "mitigación": "Usar proxy rotativo no implementado"
+        },
+        {
+          "tipo": "SESSION_PERSISTENCE",
+          "severidad": "BAJO",
+          "mitigación": "Usa --user-data-dir para mantener sesión",
+          "riesgo": "Si session cookie expire, debe re-authenticate"
+        }
+      ]
+    },
+    "rate_limiting": {
+      "implementado": false,
+      "problemas": [
+        {
+          "severidad": "CRÍTICO",
+          "issue": "NO hay rate limiting real",
+          "actual": "Solo sleep(wait_seconds) entre aplicaciones",
+          "riesgo": "Puede hacer 10+ requests/segundo si wait_seconds=1"
+        },
+        {
+          "severidad": "ALTO",
+          "tipo": "MULTIPLE_SEARCH_CYCLES",
+          "código": "for keyword in settings.search_keywords:  # Default 5+ keywords\n    for offer in platform.search(keyword):  # Cada search = múltiples requests",
+          "impacto": "5 keywords * 10 ofertas * 2 botcycle = 100+ requests por 5 minutos"
+        },
+        {
+          "severidad": "MEDIO",
+          "tipo": "NO_BACKOFF_STRATEGY",
+          "problema": "Si 429 error, qué pasa?",
+          "respuesta": "Bot logs y continúa; NO HAY exponential backoff"
+        }
+      ]
+    },
+    "error_recovery": {
+      "level": "INCONSISTENT",
+      "patterns": [
+        {
+          "approach": "SILENTLY_CONTINUE",
+          "locations": [
+            "magneto.py - TimeoutException caught and logged, bot continues",
+            "magneto.py - _close_optional_popups() - exceptions caught silently",
+            "question_answerer.py - _answer_question_element() - returns False"
+          ],
+          "pro": "Bot no se crasha",
+          "contra": "Puede estar operando en estado inválido"
+        },
+        {
+          "approach": "RETRY_LOGIC",
+          "existe": false,
+          "necesidad": "ALTA - Hay muchas operaciones que podrían ser transitorias"
+        },
+        {
+          "approach": "FALLBACK_STRATEGIES",
+          "ejemplos": [
+            "search() no encuentra resultados -> try city URL",
+            "_wait_for_login() retorna si logged in (no retry)",
+            "No hay fallback si apply form no aparece"
+          ]
+        }
+      ]
+    },
+    "browser_lifecycle": {
+      "python": {
+        "creación": "driver = create_browser_driver(settings)",
+        "problemas": [
+          "No hay timeout en creación",
+          "Si browser está bloqueado, espera indefinidamente",
+          "Fallback a bot profile si real profile no abre"
+        ]
+      },
+      "javascript": {
+        "creación": "chromium.launchPersistentContext(...)",
+        "problemas": [
+          "Contexto nunca se cierra",
+          "Pages nunca se limpian",
+          "Memory leak: páginas abiertas acumulan"
+        ]
+      },
+      "ambos": {
+        "problema": "NO hay heartbeat/healthcheck",
+        "riesgo": "Si browser se congela, bot continúa sin noticia",
+        "caso": "Browser hang por Magneto timeout -> bot espera 20 seg -> timeout pero continúa"
+      }
+    }
+  },
+  "5_DATABASE_ANALYSIS": {
+    "schema": {
+      "tablas": [
+        "companies",
+        "jobs",
+        "applications",
+        "searches",
+        "skills",
+        "job_skills",
+        "logs",
+        "questions (creada dinámicamente)"
+      ],
+      "problemas": [
+        {
+          "severity": "ALTO",
+          "tabla": "jobs",
+          "problema": "description es MEDIUMTEXT pero queries lo seleccionan todo",
+          "impacto": "SELECT * FROM jobs trae gigantescas descripciones innecesarias"
+        },
+        {
+          "severity": "ALTO",
+          "tabla": "jobs",
+          "problema": "Múltiples ENUM fields (status, priority, modality)",
+          "valores": [
+            "status: 'found', 'discarded', 'applied', 'error', 'no_available'",
+            "priority: 'baja', 'normal', 'alta'",
+            "modality: hardcoded en aplicación"
+          ],
+          "riesgo": "Si valores cambian, migrations dolorosas"
+        },
+        {
+          "severity": "MEDIO",
+          "tabla": "jobs",
+          "campo": "url VARCHAR(1000)",
+          "problema": "Potencialmente truncado si URL > 1000 chars",
+          "riesgo": "Baja probabilidad en jobs.magneto365.com pero posible"
+        }
+      ]
+    },
+    "queries": [
+      {
+        "severity": "CRÍTICO",
+        "tipo": "N_PLUS_1",
+        "location": "tracker.py - _sync_skills()",
+        "código": "for skill in skills:\n    cursor.execute('INSERT INTO skills...')\n    cursor.execute('SELECT id FROM skills...')\n    cursor.execute('INSERT INTO job_skills...')",
+        "impacto": "3 queries por skill; 20 skills = 60 queries",
+        "fix": "Batch: INSERT ... ON DUPLICATE, luego bulk fetch, luego bulk insert"
+      },
+      {
+        "severity": "CRÍTICO",
+        "tipo": "FULL_TABLE_SCAN",
+        "location": "jobRepository.js - getDashboardData()",
+        "código": "SELECT * FROM jobs WHERE title LIKE ? OR company_name LIKE ? OR location LIKE ?",
+        "problema": "LIKE con % prefix hace full table scan",
+        "índices": "No hay índice en title, company_name, location"
+      },
+      {
+        "severity": "ALTO",
+        "tipo": "INEFFICIENT_SELECT",
+        "location": "tracker.py - get_seen_urls()",
+        "código": "SELECT url FROM jobs WHERE status IN (?, ?)",
+        "problema": "url VARCHAR(1000) = lento resultado set",
+        "fix": "SELECT id FROM jobs; luego convert a set en app"
+      },
+      {
+        "severity": "ALTO",
+        "tipo": "MISSING_INDEX",
+        "query": "SELECT * FROM questions WHERE created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)",
+        "índice_existente": "idx_created_at EXISTS",
+        "problema": "Pero luego GROUP BY question_text sin índice"
+      }
+    ],
+    "indexes": {
+      "existentes": [
+        "jobs: idx_jobs_match_score, idx_jobs_priority, idx_jobs_status",
+        "logs: idx_logs_created_at, idx_logs_level",
+        "questions: idx_created_at, idx_question_text(100)",
+        "searches: idx_searches_keyword, idx_searches_started_at"
+      ],
+      "faltantes": [
+        "jobs: NO índice en (company_id, created_at) para queries comunes",
+        "applications: NO índice en created_at",
+        "skills: NO índice en name; UNIQUE KEY existe pero no para SELECT",
+        "job_skills: NO índice en skill_id; solo PK en (job_id, skill_id)"
+      ]
+    },
+    "n_plus_1_problems": [
+      {
+        "location": "tracker.py - record() method",
+        "flujo": "1. INSERT company, 2. SELECT company id, 3. INSERT job, 4. SELECT job id, 5. FOR each skill: INSERT skill, SELECT id, INSERT job_skill",
+        "queries": "5-25 queries por job application"
+      },
+      {
+        "location": "jobRepository.js - upsertJob()",
+        "mismo_problema": "Similar pattern con syncSkills()"
+      }
+    ],
+    "scaling_risks": [
+      {
+        "tipo": "LINEAR_GROWTH",
+        "tabla": "jobs",
+        "crecimiento": "~20 jobs/hora * 24 horas = 480 jobs/día = 175,200 jobs/año",
+        "a_1_año": "175k rows = todavía OK",
+        "a_5_años": "875k rows = empieza a lentificar",
+        "a_10_años": "1.75M rows = queries lentas sin índices apropiados"
+      },
+      {
+        "tipo": "LOGS_EXPLOSION",
+        "tabla": "logs",
+        "crecimiento": "~100 logs/ciclo * (300 seg / 300) = 100 logs/5 min = 28,800 logs/día",
+        "a_30_días": "864k rows en logs sola",
+        "problema": "SELECT * FROM logs en dashboard trae todo"
+      },
+      {
+        "tipo": "QUESTIONS_LEARNING",
+        "tabla": "questions",
+        "crecimiento": "Si cada aplicación guarda 5 preguntas = 100 jobs * 5 = 500 preguntas/ciclo",
+        "a_30_días": "500 * 288 ciclos = 144k preguntas/mes",
+        "sin_retention_policy": "Crece indefinidamente"
+      },
+      {
+        "tipo": "CONNECTION_POOL_EXHAUSTION",
+        "pool_size": "10 connections (hardcoded en connection.js)",
+        "issue": "Si bot abre 11 parallel queries, 1 espera. Si bot corre 10 ciclos en paralelo...",
+        "riesgo": "Deadlock potencial"
+      }
+    ]
+  },
+  "6_SEGURIDAD": {
+    "credential_management": {
+      "nivel": "CRÍTICO",
+      "problemas": [
+        {
+          "severity": "CRÍTICO",
+          "tipo": "ENV_VARIABLES_EXPOSED",
+          "archivos": [
+            ".env file en versión control (asumido)",
+            "config.py carga desde múltiples .env",
+            "settings.edge_binary_path, edge_user_data_dir guardadas en config"
+          ],
+          "exposición": "DB_PASSWORD, EDGE_USER_DATA_DIR en memory si debugged"
+        },
+        {
+          "severity": "CRÍTICO",
+          "tipo": "NO_ENCRYPTION",
+          "datos": [
+            "profile.json con telefono, email, cedula",
+            "Database credentials en plaintext en config.py",
+            "CV path accesible desde aplicación"
+          ],
+          "riesgo": "Si máquina comprometida, todos los datos expuestos"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "BROWSER_PROFILE_SHARING",
+          "problema": "Bot usa same Google/Magneto login del usuario real",
+          "escenario": "Si bot browser history accedido, usuario real comprometido",
+          "mitigación_parcial": "--profile-directory=Bot pero comparten datos"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "NO_SECRET_ROTATION",
+          "credenciales": [
+            "Database password nunca cambia en config",
+            "Magneto login nunca re-authenticates (reutiliza cookies)"
+          ]
+        }
+      ]
+    },
+    "sql_injection": {
+      "nivel": "BAJO",
+      "razón": "Ambos botsusan parameterized queries",
+      "ejemplos": [
+        "Python: cursor.execute('SELECT ... WHERE status IN (%s, %s)', tuple(statuses))",
+        "JavaScript: pool.execute('SELECT ... WHERE name = ?', [companyName])"
+      ],
+      "pero_riesgos": [
+        {
+          "tipo": "DYNAMIC_QUERY_CONSTRUCTION",
+          "location": "jobRepository.js - getDashboardData()",
+          "código": "LIMIT ${safeLimit} OFFSET ${offset}",
+          "problema": "Aunque existe validación (Math.min, Math.max), es fragile",
+          "mejora": "Usar queries con ? placeholders"
+        },
+        {
+          "tipo": "JSON_INJECTION",
+          "location": "logRepository.js - saveLog()",
+          "código": "JSON.stringify(meta) stored en DB",
+          "riesgo": "Si meta contiene user input, JSON injection posible",
+          "bajo_porque": "Meta viene de logger, no user input"
+        }
+      ]
+    },
+    "data_exposure": {
+      "crítica": [
+        {
+          "tipo": "API_ENDPOINT_LEAKAGE",
+          "endpoint": "/api/dashboard - NO AUTHENTICATION",
+          "expone": "Todos los jobs, scoring, ubicaciones, empresas",
+          "riesgo": "CRÍTICO si servidor accesible externamente"
+        },
+        {
+          "severity": "CRÍTICO",
+          "endpoint": "/api/logs - NO AUTHENTICATION",
+          "expone": "Todos los logs del bot incluyendo errores",
+          "información_revelada": [
+            "Hora exacta de cada aplicación",
+            "Job IDs aplicadas",
+            "Error messages con stack traces potencial"
+          ]
+        },
+        {
+          "severity": "ALTO",
+          "endpoint": "/events - Server Sent Events, NO AUTHENTICATION",
+          "expone": "Real-time logs siendo procesados",
+          "riesgo": "Si websocket/SSE abierto públicamente"
+        },
+        {
+          "severity": "ALTO",
+          "endpoint": "/api/status",
+          "expone": "config.bot.minMatchScore, keywords, intervalMs",
+          "riesgo": "Información sobre configuración bot"
+        }
+      ]
+    },
+    "api_security": {
+      "problemas": [
+        {
+          "severity": "CRÍTICO",
+          "tipo": "NO_AUTHENTICATION",
+          "endpoints": ["ALL /api/*"],
+          "mitigación": "NINGUNA"
+        },
+        {
+          "severity": "CRÍTICO",
+          "tipo": "NO_RATE_LIMITING",
+          "riesgo": "DOS attack posible",
+          "ejemplo": "GET /api/dashboard 1000 veces/seg = crash"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "NO_CORS",
+          "impacto": "Si frontend no local, browser podría rechazar"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "NO_INPUT_VALIDATION",
+          "endpoint": "/api/dashboard",
+          "parámetros": "search, page, limit",
+          "problema": "search no es sanitizado; podría tener SQL injection intent",
+          "mitigación_existente": "LIKE escape pero frágil"
+        },
+        {
+          "severity": "ALTO",
+          "tipo": "NO_ERROR_HANDLING",
+          "endpoint": "GET /api/logs",
+          "comportamiento": "Si query falla, 500 error con stack trace posible"
+        },
+        {
+          "severity": "MEDIO",
+          "tipo": "NO_HTTPS",
+          "problema": "Si server expuesto internamente, no hay encriptación"
+        }
+      ]
+    },
+    "data_privacy_issues": [
+      {
+        "severity": "CRÍTICO",
+        "tipo": "CANDIDATE_PII_STORAGE",
+        "datos": [
+          "Teléfono del candidato: +57 320 391 4473",
+          "Email: daniloalvarez1719@gmail.com",
+          "Documento: 1000134338",
+          "Ciudad: Bogota, D.C."
+        ],
+        "dónde": "candidate_profile.json + database jobs.description",
+        "riesgo": "GDPR, CCPA violation si empleadores acceden"
+      },
+      {
+        "severity": "ALTO",
+        "tipo": "APPLICATION_HISTORY",
+        "tabla": "applications",
+        "datos": "Qué jobs aplicó el candidato, cuándo, qué respuestas",
+        "riesgo": "Empleadores podrían perfilar candidato"
+      },
+      {
+        "severity": "ALTO",
+        "tipo": "LOGS_RETENTION",
+        "tabla": "logs",
+        "datos": "Cuándo aplicó, a qué, si hubo errores",
+        "política": "NO hay retention policy; acumula indefinidamente"
+      }
+    ],
+    "recomendaciones_críticas": [
+      "1. Agregar AUTHENTICATION a todos /api/* endpoints (JWT, OAuth)",
+      "2. Implementar RATE LIMITING",
+      "3. Encriptar credential storage (usar secrets manager)",
+      "4. Agregar DATA ENCRYPTION en tránsito (HTTPS)",
+      "5. Implementar AUDIT LOGS para acceso a datos sensibles",
+      "6. Crear RETENTION POLICY para logs y preguntas",
+      "7. Sanitizar y validar TODOS los inputs",
+      "8. NO exponer error details en respuestas API",
+      "9. Usar PREPARED STATEMENTS para todas las queries",
+      "10. Implementar SECRETS ROTATION para database password"
+    ]
+  },
+  "RESUMEN_RIESGOS_POR_SEVERIDAD": {
+    "CRÍTICO": [
+      "Duplicación total de código entre Python y JS bots",
+      "XPath hardcodeados sin fallbacks",
+      "NO AUTHENTICATION en API endpoints",
+      "N+1 database queries en operaciones críticas",
+      "Memory leaks en browser contexts",
+      "Race condition en bot cycle lock",
+      "PII expuesta en API responses sin auth",
+      "Arquitectura monolítica imposible de mantener"
+    ],
+    "ALTO": [
+      "Question answerer no escalable (500 preguntas máx)",
+      "Funciones >80 líneas sin tests",
+      "Error handling silencioso (bombs a plazotimer)",
+      "Duplicación de skill matching logic",
+      "Database pooling sin límites claros",
+      "Behavioral detection anti-bot possible",
+      "Search engine sin índices apropiados",
+      "Rate limiting inexistente"
+    ],
+    "RECOMENDACIÓN_GENERAL": "Refactorizar a arquitectura única (elegir Python O JS, no ambos). Implementar pattern Strategy para scraping. Crear testing suite. Agregar autenticación y autorización. Implementar retry logic y backoff exponencial."
+  }
+}
