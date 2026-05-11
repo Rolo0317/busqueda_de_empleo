@@ -73,6 +73,7 @@ def main() -> None:
 
     try:
         wait = WebDriverWait(driver, max(20, settings.wait_seconds))
+        tracker = MySqlApplicationTracker(settings)
         platform = MagnetoPlatform(driver=driver, wait=wait, settings=settings, tracker=tracker)
         tracker.ensure_questions_table()
 
