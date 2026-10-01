@@ -27,6 +27,8 @@ venv/
 ENV/
 env/
 .env
+.env.*
+!.env.example
 
 # Selenium/Browser
 chromedriver
@@ -72,6 +74,8 @@ temp/
 # MySql/Database config (CRÍTICO - NUNCA EXPONER)
 .env
 .env.local
+.env.*
+!.env.example
 .env.*.local
 config.local.js
 database.config.js
@@ -87,9 +91,6 @@ secrets/
 *.csv
 temp_data/
 
-# Dashboard node_modules (ya está cubierto pero enfatizar)
-magneto_job_system/node_modules/
-magneto_job_system/dashboard/node_modules/
 
 # Job bot venv (ya está cubierto pero enfatizar)
 job_bot/.venv/
@@ -98,3 +99,26 @@ job_bot/venv/
 # Archivos específicos de usuarios
 edge_user_data/
 chrome_user_data/
+
+# Perfil del navegador del bot: guarda las cookies de sesion de Magneto y
+# Computrabajo. Subirlo equivale a publicar las sesiones iniciadas.
+.edge-bot/
+job_bot/.edge-bot/
+job_bot/.edge-bot.viejo/
+
+# Capturas que el bot genera al diagnosticar postulaciones
+job_bot/*.png
+
+# Logs rotados: llevan las respuestas enviadas, con telefono y correo.
+*.log.*
+
+# Datos personales del candidato. Se sube solo la plantilla
+# (candidate_profile.example.json); cada usuario crea la suya.
+job_bot/candidate_profile.json
+PRODUCT.md
+
+# Configuracion local de herramientas de IA y diseno
+.claude/
+.codex/
+.impeccable/
+.mcp.json

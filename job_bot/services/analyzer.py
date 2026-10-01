@@ -126,8 +126,19 @@ class OfferAnalyzer:
 
     @staticmethod
     def _salary_value(salary: str) -> int:
-        numbers = [int(value.replace(".", "").replace(",", "")) for value in re.findall(r"\d[\d.,]*", salary)]
-        return max(numbers, default=0)
+        """Convierte el texto de salario a un entero de pesos.
+
+        Los decimales se descartan antes de quitar separadores: en el formato
+        colombiano "2.700.000,00" una limpieza ingenua produce 270.000.000, cien
+        veces el valor real, y el filtro de salario deja de servir.
+        """
+        valores = []
+        for crudo in re.findall(r"\d[\d.,]*", salary):
+            sin_decimales = re.sub(r"[.,]\d{2}$", "", crudo)
+            limpio = sin_decimales.replace(".", "").replace(",", "")
+            if limpio.isdigit():
+                valores.append(int(limpio))
+        return max(valores, default=0)
 
     @staticmethod
     def _normalize(value: str) -> str:

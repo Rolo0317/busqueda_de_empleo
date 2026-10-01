@@ -22,8 +22,13 @@ class ApplicationTracker(Protocol):
 class MySqlApplicationTracker:
     STATUS_MAP = {
         "aplicado": "applied",
+        "encontrado": "found",
+        "found": "found",
         "descartado": "discarded",
         "no disponible": "no_available",
+        "formulario incompleto": "no_available",
+        "requiere sesion": "no_available",
+        "requiere pasos adicionales": "no_available",
         "error": "error",
         "applied": "applied",
         "discarded": "discarded",
@@ -32,6 +37,11 @@ class MySqlApplicationTracker:
 
     APPLICATION_STATUSES = {"applied", "error", "no_available"}
     FINAL_JOB_STATUSES = {"applied", "discarded"}
+    # Estados que pueden ser pasajeros (pagina caida, sesion vencida). Se
+    # reintentan, pero no antes de este plazo: sin el, la misma oferta fallida
+    # se reabria en cada ciclo, 236 veces en tres dias.
+    RETRY_JOB_STATUSES = {"no_available", "error"}
+    RETRY_AFTER_HOURS = 24
 
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
@@ -40,9 +50,16 @@ class MySqlApplicationTracker:
         connection = self._connect()
         try:
             cursor = connection.cursor()
+            finales = tuple(sorted(self.FINAL_JOB_STATUSES))
+            reintentables = tuple(sorted(self.RETRY_JOB_STATUSES))
             cursor.execute(
-                "SELECT url FROM jobs WHERE status IN (%s, %s)",
-                tuple(self.FINAL_JOB_STATUSES),
+                f"""
+                SELECT url FROM jobs
+                WHERE status IN ({", ".join(["%s"] * len(finales))})
+                   OR (status IN ({", ".join(["%s"] * len(reintentables))})
+                       AND updated_at > NOW() - INTERVAL %s HOUR)
+                """,
+                (*finales, *reintentables, self.RETRY_AFTER_HOURS),
             )
             return {str(row[0]) for row in cursor.fetchall() if row[0]}
         finally:

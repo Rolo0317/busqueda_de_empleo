@@ -1,0 +1,55 @@
+/* Tokens del mundo Medallon. La fuente de verdad es DESIGN.md en la raiz. */
+
+:root{
+  --papel:#FAFAF7;
+  --tinta:#14181F;
+  --oro:#C8960C;
+  --plata:#59636F;
+  --bronce:#8C5A2B;
+  --filete:#C7CDD4;
+  --peligro:#A32B1C;
+  color-scheme:light;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+html{-webkit-text-size-adjust:100%}
+
+body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  background:var(--papel);
+  color:var(--tinta);
+  font-size:15px;
+  line-height:1.45;
+  font-variant-numeric:tabular-nums;
+  overflow-x:hidden;
+}
+
+/* Objetivo tactil minimo de 44px en todo lo que se pulsa. */
+button{
+  font:inherit;cursor:pointer;
+  background:var(--tinta);color:var(--papel);
+  border:1px solid var(--tinta);border-radius:2px;
+  padding:10px 18px;font-weight:600;min-height:44px;
+  transition:background 160ms ease-out,border-color 160ms ease-out;
+}
+button:hover:not(:disabled){background:#000}
+button:disabled{opacity:.42;cursor:not-allowed}
+button:focus-visible{outline:2px solid var(--oro);outline-offset:2px}
+
+button.secundario{background:transparent;color:var(--tinta);border-color:var(--filete)}
+button.secundario:hover:not(:disabled){background:transparent;border-color:var(--tinta)}
+button.peligro{background:var(--peligro);border-color:var(--peligro)}
+button.peligro:hover:not(:disabled){background:#8A2417}
+
+input{
+  font:inherit;width:100%;
+  padding:10px 12px;margin-top:5px;min-height:44px;
+  border:1px solid var(--filete);border-radius:2px;
+  background:#fff;color:var(--tinta);
+}
+input::placeholder{color:#8A93A0}
+input:focus{outline:2px solid var(--oro);outline-offset:1px;border-color:var(--tinta)}
+input[type="checkbox"]{min-height:auto;accent-color:var(--tinta)}
+
+a:focus-visible{outline:2px solid var(--oro);outline-offset:2px;border-radius:2px}

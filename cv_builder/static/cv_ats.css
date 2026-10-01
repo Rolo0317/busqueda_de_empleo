@@ -1,0 +1,35 @@
+/*
+ * Estilo del CV para ATS. Sobrio a proposito: nada de letter-spacing (se extrae
+ * como letras sueltas), nada de columnas ni posicionamiento (desordena la
+ * lectura) y ninguna palabra importante dentro de un pseudo-elemento o imagen.
+ */
+@page { size: A4; margin: 16mm 18mm; }
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 10.5pt;
+  line-height: 1.4;
+  color: #111;
+  background: #fff;
+  margin: 0;
+}
+
+h1 { font-size: 18pt; margin: 0; }
+.titulo { font-size: 11.5pt; font-weight: bold; margin: 2px 0 0; }
+.contacto { margin: 4px 0 0; }
+
+h2 {
+  font-size: 11.5pt;
+  margin: 14px 0 6px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid #111;
+}
+
+h3 { font-size: 10.5pt; margin: 8px 0 0; }
+.empresa { margin: 0 0 2px; font-style: italic; }
+
+p { margin: 0 0 4px; }
+ul { margin: 2px 0 6px; padding-left: 18px; }
+li { margin-bottom: 2px; }
+
+.empleo { break-inside: avoid; }

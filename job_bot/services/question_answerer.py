@@ -2,8 +2,12 @@ import json
 import re
 import unicodedata
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from typing import Any
+from services.anios_tecnologia import anios_de
+from services.eleccion_opciones import EleccionDeOpciones
+from services.respuestas_locales import RespuestasLocales
 
 
 @dataclass(frozen=True)
@@ -15,10 +19,15 @@ class AnswerDecision:
 
 
 class CandidateQuestionAnswerer:
-    def __init__(self, profile_path: Path) -> None:
+    def __init__(self, profile_path: Path, ai_client: Any | None = None) -> None:
         self.profile = self._load_profile(profile_path)
+        self.ai_client = ai_client
+        # Respuestas deterministas desde el perfil: no dependen de cuota de IA.
+        self.locales = RespuestasLocales(self.profile)
+        self.opciones = EleccionDeOpciones(self.profile)
 
     def answer(self, question: str, options: list[str]) -> AnswerDecision:
+        raw_question = re.sub(r"\s+", " ", question or "").strip()
         normalized = self._normalize(question)
         normalized_options = [self._normalize(option) for option in options]
 
@@ -26,7 +35,23 @@ class CandidateQuestionAnswerer:
             return self._skip("Texto visible no parece pregunta")
 
         if self._has_any(normalized, self.profile.get("never_answer_keywords", [])):
-            return self._skip("Pregunta sensible fuera del perfil")
+            return self._answer_sensitive_question(options, normalized_options)
+
+        # Donde vive y las escalas numericas se deciden antes que nada: son datos
+        # exactos del perfil que los fallbacks contestaban mal ("No" a su propia
+        # ciudad, o un parrafo donde pedian un numero del 1 al 5).
+        residencia = self._answer_residence(normalized)
+        if residencia.should_answer:
+            if options and residencia.value:
+                elegida = self._match_boolean_option(options, normalized_options,
+                                                     residencia.value, residencia.reason)
+                if elegida.should_answer:
+                    return elegida
+            return residencia
+
+        escala = self.locales.responder(raw_question) if self._es_escala(normalized) else None
+        if escala:
+            return AnswerDecision(escala, 0.9, "Nivel en la escala pedida", True)
 
         boolean_like = self._looks_like_boolean_question(normalized, normalized_options)
         boolean_answer = self._answer_boolean(normalized, normalized_options)
@@ -43,20 +68,25 @@ class CandidateQuestionAnswerer:
             option_answer = self._answer_option(normalized, options, normalized_options)
             if option_answer.should_answer:
                 return option_answer
-            return self._skip("Opciones visibles sin regla confiable")
+            return self._answer_option_fallback(normalized, options, normalized_options)
 
         if boolean_like:
-            return self._skip("Pregunta si/no sin regla confiable")
+            # Antes de contestar "No" a ciegas se mira si el perfil tiene el dato:
+            # "¿Nivel de ingles?" parece si/no y en realidad pide una respuesta.
+            local = self.locales.responder(raw_question)
+            if local:
+                return AnswerDecision(local, 0.85, "Dato del perfil pese a parecer si/no", True)
+            return AnswerDecision("No", 0.45, "Fallback conservador para pregunta si/no sin dato exacto", True)
 
         numeric_answer = self._answer_numeric(normalized)
         if numeric_answer.should_answer:
             return numeric_answer
 
-        text_answer = self._answer_text(normalized)
+        text_answer = self._answer_text(raw_question, normalized)
         if text_answer.should_answer:
             return text_answer
 
-        return self._skip("Sin regla confiable")
+        return self._fallback_text_answer()
 
     def _answer_boolean(self, question: str, normalized_options: list[str]) -> AnswerDecision:
         if not self._looks_like_boolean_question(question, normalized_options):
@@ -92,6 +122,10 @@ class CandidateQuestionAnswerer:
         if self._has_any(question, ("formacion profesional en ingenieria", "profesional en ingenieria")):
             return AnswerDecision("No", 0.85, "No hay titulo profesional de ingenieria en perfil", True)
 
+        agentes = self._answer_agents_boolean(question)
+        if agentes.should_answer:
+            return agentes
+
         tech_answer = self._answer_technology_boolean(question)
         if tech_answer.should_answer:
             return tech_answer
@@ -102,43 +136,67 @@ class CandidateQuestionAnswerer:
 
         return self._skip("Pregunta si/no no mapeada")
 
+    # Preguntas que indagan donde vive el candidato, no si quiere trasladarse.
+    MARCAS_RESIDENCIA = ("vives en", "vive en", "resides en", "reside en", "vives o",
+                         "radicado en", "te encuentras en", "vives cerca", "vives actualmente")
+    PATRON_ESCALA = re.compile(r"escala de\s*1\s*a\s*[0-9]+")
+
+    @classmethod
+    def _es_escala(cls, question: str) -> bool:
+        return bool(cls.PATRON_ESCALA.search(question))
+
+    def _answer_residence(self, question: str) -> AnswerDecision:
+        """Responde si vive en la ciudad que menciona la pregunta.
+
+        El fallback conservador contestaba "No" a "vives en Bogota?" siendo esa
+        su ciudad: una sola palabra que lo descarta de la vacante de entrada.
+        """
+        if not self._has_any(question, self.MARCAS_RESIDENCIA):
+            return self._skip("No pregunta por residencia")
+
+        ciudad = self._normalize(self.profile.get("city", ""))
+        partes = [p for p in re.split(r"[,\s]+", ciudad) if len(p) > 3]
+        if not partes:
+            return self._skip("Sin ciudad en el perfil")
+
+        if any(parte in question for parte in partes):
+            return AnswerDecision("Si", 0.95, f"Reside en {self.profile.get('city')}", True)
+
+        # Menciona otra ciudad: se dice la verdad, y donde si vive.
+        return AnswerDecision("No", 0.9, f"Reside en {self.profile.get('city')}", True)
+
+    def _answer_agents_boolean(self, question: str) -> AnswerDecision:
+        """Preguntas si/no sobre agentes de IA, RPA y automatizacion.
+
+        El fallback conservador contestaba "No" a haber puesto controles en un
+        sistema agentico, cuando el perfil registra un agente RPA en produccion
+        con validacion, registro de corridas y aprobacion humana.
+        """
+        if not self.locales._es_agentes_ia(question):
+            return self._skip("No pregunta por agentes ni automatizacion")
+
+        anios = self.profile.get("experience_years", {})
+        respaldo = max(anios.get("rpa", 0) or 0, anios.get("generative_ai", 0) or 0)
+        if respaldo <= 0:
+            return self._skip("Sin experiencia registrada en agentes")
+
+        return AnswerDecision("Si", 0.9, "Agente RPA en produccion registrado en el perfil", True)
+
     def _answer_technology_boolean(self, question: str) -> AnswerDecision:
         if not self._has_any(question, ("experiencia", "conocimiento", "manejo", "dominio", "sabe", "trabajado", "desarrollado", "utilizando", "usando")):
             return self._skip("No pregunta tecnologia")
 
-        years = self.profile.get("experience_years", {})
-        skill_map = {
-            "react": years.get("react"),
-            "node": years.get("node"),
-            "nodejs": years.get("node"),
-            "javascript": years.get("javascript"),
-            "typescript": years.get("javascript"),
-            "angular": years.get("angular"),
-            ".net": years.get("dotnet"),
-            "net core": years.get("dotnet"),
-            "c#": years.get("dotnet"),
-            "c sharp": years.get("dotnet"),
-            "microservicio": years.get("microservices"),
-            "microservicios": years.get("microservices"),
-            "liderazgo": years.get("leadership"),
-            "liderando": years.get("leadership"),
-            "python": years.get("python"),
-            "sql": years.get("sql"),
-            "power bi": years.get("power_bi"),
-            "excel": years.get("excel"),
-            "html": years.get("html"),
-            "css": years.get("css"),
-            "api": years.get("apis_rest"),
-            "apis": years.get("apis_rest"),
-            "full stack": years.get("full_stack"),
-            "fullstack": years.get("full_stack"),
-            "docker": years.get("docker"),
-        }
-        for keyword, value in skill_map.items():
-            if keyword in question and value is not None:
-                return AnswerDecision("Si" if value > 0 else "No", 0.9, f"Experiencia registrada en {keyword}: {value}", True)
+        mencion = anios_de(question, self.profile)
+        if mencion is not None:
+            keyword, value = mencion
+            return AnswerDecision("Si" if value > 0 else "No", 0.9, f"Experiencia registrada en {keyword}: {value:g}", True)
 
         return self._skip("Tecnologia no registrada")
+
+    # Verbos con los que la oferta pide que se explaye, no que cuantifique.
+    PIDEN_RELATO = ("cuentanos", "cuentenos", "describe", "descripcion", "brevemente",
+                    "explica", "explique", "detalla", "detalle", "comenta", "menciona los",
+                    "que lenguajes", "cuales lenguajes", "tell us", "describe your")
 
     def _answer_numeric(self, question: str) -> AnswerDecision:
         years = self.profile.get("experience_years", {})
@@ -158,37 +216,23 @@ class CandidateQuestionAnswerer:
         ) and salary:
             return AnswerDecision(str(salary), 0.95, "Salario minimo del perfil", True)
 
-        if re.search(r"\b(anos|años|tiempo|experiencia)\b", question):
-            skill_map = {
-                "react": years.get("react"),
-                "node": years.get("node"),
-                "nodejs": years.get("node"),
-                "javascript": years.get("javascript"),
-                "typescript": years.get("javascript"),
-                "angular": years.get("angular"),
-                ".net": years.get("dotnet"),
-                "net core": years.get("dotnet"),
-                "c#": years.get("dotnet"),
-                "c sharp": years.get("dotnet"),
-                "microservicio": years.get("microservices"),
-                "microservicios": years.get("microservices"),
-                "liderazgo": years.get("leadership"),
-                "liderando": years.get("leadership"),
-                "python": years.get("python"),
-                "sql": years.get("sql"),
-                "power bi": years.get("power_bi"),
-                "excel": years.get("excel"),
-                "html": years.get("html"),
-                "css": years.get("css"),
-                "api": years.get("apis_rest"),
-                "apis": years.get("apis_rest"),
-                "full stack": years.get("full_stack"),
-                "fullstack": years.get("full_stack"),
-                "docker": years.get("docker"),
-            }
-            for keyword, value in skill_map.items():
-                if keyword in question and value is not None:
-                    return AnswerDecision(str(value), 0.9, f"Experiencia en {keyword}", True)
+        if self._has_any(question, ("edad",)):
+            age = self._age_from_birth_date()
+            if age is not None:
+                return AnswerDecision(str(age), 0.95, "Edad calculada desde fecha de nacimiento", True)
+
+        # "Cuentanos brevemente tu experiencia y los lenguajes que manejas" pide
+        # un relato, no una cifra: contestar "6" desperdicia la pregunta.
+        if self._has_any(question, self.PIDEN_RELATO):
+            return self._skip("Pide una descripcion, no un numero")
+
+        # Solo cuando preguntan una cantidad. Con la sola palabra "experiencia",
+        # "¿Que experiencia tiene con CI/CD?" se contestaba "6".
+        if re.search(r"\b(anos|años|tiempo)\b", question) or "cuanta experiencia" in question:
+            mencion = anios_de(question, self.profile)
+            if mencion is not None:
+                keyword, value = mencion
+                return AnswerDecision(f"{value:g}", 0.9, f"Experiencia en {keyword}", True)
             if years.get("total") is not None:
                 return AnswerDecision(str(years["total"]), 0.75, "Experiencia total", True)
 
@@ -198,11 +242,21 @@ class CandidateQuestionAnswerer:
         if not options:
             return self._skip("Sin opciones")
 
-        if self._has_any(question, ("nivel de ingles", "ingles")):
-            return self._match_option(options, normalized_options, ["a2", "basico", "basic"], "Nivel de ingles")
+        # Las preguntas de vinculo laboral se resuelven contra el perfil antes que
+        # nada: una afirmacion falsa de empleo cuesta mas que cualquier otro error.
+        vinculo = self.opciones.elegir(question, options)
+        if vinculo and "vinculo" in vinculo[1].lower():
+            return AnswerDecision(vinculo[0], 0.9, vinculo[1], True)
+
+        # En ingles la pregunta dice "english": sin esa palabra caia en "la primera
+        # opcion visible" y respondia A1 teniendo A2.
+        if self._has_any(question, ("nivel de ingles", "ingles", "english")):
+            return self._match_option(options, normalized_options,
+                                      [self._nivel_ingles(), "basico", "basic", "elementary"],
+                                      "Nivel de ingles")
 
         if self._has_any(question, ("ciudad", "ubicacion", "residencia")):
-            return self._match_option(options, normalized_options, ["bogota", "bogota d c", "colombia"], "Ubicacion")
+            return self._match_option(options, normalized_options, self._formas_ciudad(), "Ubicacion")
 
         if self._has_any(question, ("modalidad",)):
             availability = self.profile.get("availability", {})
@@ -215,6 +269,15 @@ class CandidateQuestionAnswerer:
                 preferred.append("presencial")
             return self._match_option(options, normalized_options, preferred, "Modalidad")
 
+        if self._has_any(question, ("nivel educativo", "formacion", "titulo", "estudios")):
+            education_levels = [edu.get("degree", "").lower() for edu in self.profile.get("education", [])]
+            if any("tecnico" in level for level in education_levels):
+                return self._match_option(options, normalized_options, ["tecnico"], "Nivel educativo del perfil")
+            elif any("tecnologo" in level for level in education_levels):
+                return self._match_option(options, normalized_options, ["tecnologo"], "Nivel educativo del perfil")
+            elif any("profesional" in level or "ingeniero" in level or "licenciado" in level for level in education_levels):
+                return self._match_option(options, normalized_options, ["profesional"], "Nivel educativo del perfil")
+
         skill_option = self._answer_skill_option(question, options, normalized_options)
         if skill_option.should_answer:
             return skill_option
@@ -222,25 +285,16 @@ class CandidateQuestionAnswerer:
         return self._skip("Opcion no mapeada")
 
     def _answer_skill_option(self, question: str, options: list[str], normalized_options: list[str]) -> AnswerDecision:
-        years = self.profile.get("experience_years", {})
-        skill_map = {
-            "angular": years.get("angular"),
-            ".net": years.get("dotnet"),
-            "net core": years.get("dotnet"),
-            "c#": years.get("dotnet"),
-            "microservicio": years.get("microservices"),
-            "microservicios": years.get("microservices"),
-            "liderazgo": years.get("leadership"),
-            "liderando": years.get("leadership"),
-            "sql": years.get("sql"),
-            "nosql": years.get("sql"),
-            "react": years.get("react"),
-            "python": years.get("python"),
-            "javascript": years.get("javascript"),
-        }
-        for keyword, value in skill_map.items():
-            if keyword not in question or value is None:
-                continue
+        # El perfil manda: elegir por nivel evita respuestas como "solo backend"
+        # o "sin experiencia" cuando el perfil registra anos en esa tecnologia.
+        por_perfil = self.opciones.elegir(question, options)
+        # Nivel o rango de anos respaldado por el perfil: esa eleccion manda.
+        if por_perfil and any(k in por_perfil[1].lower() for k in ("nivel", "rango")):
+            return AnswerDecision(por_perfil[0], 0.9, por_perfil[1], True)
+
+        mencion = anios_de(question, self.profile)
+        if mencion is not None:
+            keyword, value = mencion
 
             if self._has_any(question, ("nivel", "dominio")):
                 preferred = self._experience_level_preferences(value)
@@ -255,18 +309,41 @@ class CandidateQuestionAnswerer:
                 if any(word in normalized_option for word in preferred) and not any(word in normalized_option for word in avoided):
                     return AnswerDecision(option, 0.9, f"Opcion por experiencia registrada en {keyword}: {value}", True)
 
+            # Las opciones pueden ser frases y no etiquetas: "Si" no coincidiria
+            # con ninguna y la pregunta quedaria sin responder.
+            por_alcance = self.opciones.elegir_por_afirmacion(question, options)
+            if por_alcance:
+                return AnswerDecision(por_alcance[0], 0.88, por_alcance[1], True)
+
             return AnswerDecision("Si" if value > 0 else "No", 0.9, f"Experiencia registrada en {keyword}: {value}", True)
 
         return self._skip("No hay skill opcion mapeada")
 
-    def _answer_text(self, question: str) -> AnswerDecision:
+    def _answer_text(self, raw_question: str, question: str) -> AnswerDecision:
         texts = self.profile.get("short_texts", {})
         phone = self.profile.get("phone")
         city = self.profile.get("city")
         document_number = self.profile.get("document_number")
         email = self.profile.get("email")
+        birth_date = self.profile.get("birth_date")
+        linkedin = self.profile.get("linkedin")
 
-        if self._has_any(question, ("telefono", "celular", "numero de contacto")) and phone:
+        # "Whatsapp" es la forma mas comun de pedir el celular en estas ofertas,
+        # y sin ella la pregunta caia en el resumen de experiencia.
+        pide_telefono = self._has_any(question, (
+            "telefono", "celular", "numero de contacto", "whatsapp", "wpp", "wasap",
+            "numero movil",
+            # "Dejar linea de contacto" caia en la regla de motivacion por
+            # la palabra "interesad@".
+            "linea de contacto", "dejar linea", "datos de contacto", "medio de contacto"))
+        pide_correo = self._has_any(question, ("correo", "email", "e-mail"))
+
+        # Muchas ofertas piden ambos en un mismo campo; dar solo uno deja a la
+        # empresa sin la via de contacto que iba a usar.
+        if pide_telefono and pide_correo and phone and email:
+            return AnswerDecision(f"{phone} / {email}", 0.98, "Contacto del perfil", True)
+
+        if pide_telefono and phone:
             return AnswerDecision(str(phone), 0.98, "Telefono del perfil", True)
 
         if self._has_any(question, ("ciudad", "donde vives", "lugar de residencia", "residencia")) and city:
@@ -278,8 +355,21 @@ class CandidateQuestionAnswerer:
         if self._has_any(question, ("cedula", "documento", "identificacion")) and document_number:
             return AnswerDecision(str(document_number), 0.95, "Documento del perfil", True)
 
+        if self._has_any(question, ("fecha de nacimiento", "nacimiento")) and birth_date:
+            return AnswerDecision(str(birth_date), 0.95, "Fecha de nacimiento del perfil", True)
+
+        if self._has_any(question, ("linkedin", "linked in")) and linkedin:
+            return AnswerDecision(str(linkedin), 0.95, "LinkedIn del perfil", True)
+
         if self._has_any(question, ("por que", "porque", "motivacion", "interesa")) and texts.get("motivation"):
             return AnswerDecision(texts["motivation"], 0.8, "Motivacion aprobada", True)
+
+        # Las respuestas especificas del perfil van antes que el resumen: la regla
+        # del resumen se activa con la palabra "experiencia", que aparece en casi
+        # todas las preguntas, y tapaba el pipeline, las tecnologias, el ETL...
+        local = self.locales.responder(raw_question)
+        if local:
+            return AnswerDecision(local, 0.85, "Respuesta construida desde el perfil", True)
 
         if self._has_any(question, ("perfil", "resumen", "experiencia")) and texts.get("profile_summary"):
             return AnswerDecision(texts["profile_summary"], 0.8, "Resumen aprobado", True)
@@ -287,7 +377,70 @@ class CandidateQuestionAnswerer:
         if self._has_any(question, ("fortaleza", "habilidad", "competencia")) and texts.get("strengths"):
             return AnswerDecision(texts["strengths"], 0.8, "Fortalezas aprobadas", True)
 
-        return self._skip("Texto no mapeado")
+        if self.ai_client:
+            answer = self.ai_client.answer_open_question(raw_question, self.profile)
+            if answer:
+                return AnswerDecision(answer, 0.72, "Respuesta abierta generada por IA gratuita", True)
+
+        return self._fallback_text_answer()
+
+    def _answer_sensitive_question(self, options: list[str], normalized_options: list[str]) -> AnswerDecision:
+        if options:
+            answer = self._match_option(
+                options,
+                normalized_options,
+                ["prefiero no responder", "no aplica", "ninguna", "ninguno", "no"],
+                "Pregunta sensible sin dato exacto",
+            )
+            if answer.should_answer:
+                return answer
+        return AnswerDecision("No especificado", 0.45, "Pregunta sensible sin dato exacto en perfil", True)
+
+    def _answer_option_fallback(
+        self,
+        question: str,
+        options: list[str],
+        normalized_options: list[str],
+    ) -> AnswerDecision:
+        preferences: list[str] = []
+        if self._has_any(question, ("salario", "aspiracion", "pretension", "compensacion")):
+            preferences.extend(self._formas_salario() + ["negociable", "a convenir"])
+        if self._has_any(question, ("ciudad", "ubicacion", "residencia")):
+            preferences.extend(self._formas_ciudad())
+        if self._has_any(question, ("ingles",)):
+            preferences.extend([self._nivel_ingles(), "basico", "basic"])
+        if self._has_any(question, ("modalidad",)):
+            preferences.extend(["remoto", "hibrido", "presencial"])
+
+        # Antes de cualquier heuristica ciega: que el perfil decida.
+        # La lista de preferencias incluia "sin experiencia" y "si", y por eso
+        # respondia que no sabia SQL teniendo seis anos, o afirmaba empleos falsos.
+        elegida = self.opciones.elegir(question, options)
+        if elegida:
+            valor, motivo = elegida
+            return AnswerDecision(valor, 0.88, motivo, True)
+
+        preferences.extend(["no aplica", "ninguna", "ninguno", "no"])
+        answer = self._match_option(options, normalized_options, preferences, "Fallback de seleccion multiple")
+        if answer.should_answer:
+            return AnswerDecision(answer.value, 0.5, answer.reason, True)
+
+        first_option = next((option for option in options if option and option.strip()), None)
+        if first_option:
+            return AnswerDecision(first_option, 0.35, "Fallback: primera opcion visible", True)
+        return self._skip("Opciones vacias")
+
+    def _fallback_text_answer(self) -> AnswerDecision:
+        texts = self.profile.get("short_texts", {})
+        fallback = texts.get("open_question_fallback") or texts.get("profile_summary")
+        if fallback:
+            return AnswerDecision(str(fallback), 0.55, "Fallback de texto basado en perfil", True)
+        return AnswerDecision(
+            "Cuento con disponibilidad inmediata y experiencia en desarrollo, analisis de datos y automatizacion para aportar valor al equipo.",
+            0.45,
+            "Fallback general basado en perfil",
+            True,
+        )
 
     def _match_option(
         self,
@@ -316,6 +469,17 @@ class CandidateQuestionAnswerer:
                 return AnswerDecision(option, 0.9, reason, True)
         return self._skip(f"No hay opcion booleana compatible: {reason}")
 
+    def _age_from_birth_date(self) -> int | None:
+        birth_date = self.profile.get("birth_date")
+        if not birth_date:
+            return None
+        try:
+            born = date.fromisoformat(str(birth_date))
+        except ValueError:
+            return None
+        today = date.today()
+        return today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+
     @staticmethod
     def _experience_level_preferences(years: int | float) -> list[str]:
         if years >= 3:
@@ -323,6 +487,30 @@ class CandidateQuestionAnswerer:
         if years > 0:
             return ["intermedio", "medio", "basico", "estoy aprendiendo"]
         return ["sin experiencia", "no tengo experiencia", "basico", "muy basico"]
+
+    # ------------------------------------------------- datos del perfil para opciones
+
+    def _formas_ciudad(self) -> list[str]:
+        """La ciudad del perfil como suelen escribirla las opciones, de lo exacto al pais.
+
+        "Bogota, D.C., Colombia" -> ["bogota d.c. colombia", "bogota", "colombia"].
+        """
+        ciudad = self._normalize(self.profile.get("city", ""))
+        # Sin las partes cortas: "d.c." sola casaria con cualquier distrito.
+        partes = [p.strip() for p in ciudad.split(",") if len(p.strip()) > 3]
+        pais = self._normalize(self.profile.get("country", ""))
+        formas = [ciudad.replace(",", " "), *partes, pais]
+        return [f for f in dict.fromkeys(" ".join(f.split()) for f in formas) if f]
+
+    def _formas_salario(self) -> list[str]:
+        """La aspiracion del perfil en los formatos de numero que usan las opciones."""
+        monto = int(self.profile.get("minimum_salary_cop", 0) or 0)
+        if not monto:
+            return []
+        return [str(monto), f"{monto:,}".replace(",", "."), f"{monto:,}"]
+
+    def _nivel_ingles(self) -> str:
+        return self._normalize(self.profile.get("languages", {}).get("english", "")) or "basico"
 
     @staticmethod
     def _load_profile(profile_path: Path) -> dict[str, Any]:

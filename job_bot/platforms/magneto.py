@@ -1,574 +1,529 @@
+"""Magneto365 sobre Playwright.
+
+La version anterior con Selenium llenaba el formulario pero no lograba que la
+postulacion quedara registrada: los clics iban por JavaScript y React los
+descartaba. Playwright pulsa y escribe por el protocolo del navegador, que es
+lo mismo que hace una persona.
+
+Esta clase se ocupa de la sesion, la busqueda y la navegacion; el cuestionario
+vive en su propio modulo porque es lo que mas cambia.
+"""
+from __future__ import annotations
+
 import logging
 import re
+from contextlib import contextmanager
 from time import sleep
-import unicodedata
 from urllib.parse import urljoin
 
-from selenium.common.exceptions import TimeoutException
-from selenium.webdriver.common.by import By
-from selenium.webdriver.remote.webdriver import WebDriver
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
+from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
+from browser.navegador import Navegador
 from config import Settings
+from core.url_utils import canonicalize_url
 from models.job_offer import JobOffer
+from platforms import lectura_oferta as lectura
 from platforms.base import BasePlatform
+from platforms.cuestionario import CuestionarioMagneto, Pregunta
+from services.ai_answerer import FreeAiAnswerClient
 from services.question_answerer import CandidateQuestionAnswerer
 
 
 class MagnetoPlatform(BasePlatform):
+    nombre = "Magneto"
+    url_inicial = "https://www.magneto365.com/co"
     BASE_URL = "https://www.magneto365.com"
-    JOB_LINK_XPATH = "//a[contains(@href, '/empleos/')]"
-    LOGIN_LINK_XPATH = (
-        "//*[self::a or self::button][contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'iniciar') "
-        "and contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'sesi')]"
-    )
-    GOOGLE_LOGIN_XPATH = (
-        "//*[self::a or self::button][contains(translate(., 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), 'google')]"
-    )
-    APPLY_BUTTON_XPATH = (
-        "//button[contains(translate(., 'ÁÉÍÓÚABCDEFGHIJKLMNOPQRSTUVWXYZ', 'áéíóúabcdefghijklmnopqrstuvwxyz'), 'aplicar') "
-        "or contains(translate(., 'ÁÉÍÓÚABCDEFGHIJKLMNOPQRSTUVWXYZ', 'áéíóúabcdefghijklmnopqrstuvwxyz'), 'postular')]"
-        "|//a[contains(translate(., 'ÁÉÍÓÚABCDEFGHIJKLMNOPQRSTUVWXYZ', 'áéíóúabcdefghijklmnopqrstuvwxyz'), 'aplicar') "
-        "or contains(translate(., 'ÁÉÍÓÚABCDEFGHIJKLMNOPQRSTUVWXYZ', 'áéíóúabcdefghijklmnopqrstuvwxyz'), 'postular')]"
-    )
-    YES_NO_ANSWER_RULES = [
-        (("vinculo", "parentesco", "conyuge", "consejo directivo", "empleado de", "familiar"), "No"),
-        (("conflicto de interes", "inhabilidad", "antecedentes", "sancionado", "investigacion"), "No"),
-        (("discapacidad",), "No"),
-        (("autorizo", "tratamiento de datos", "politica", "terminos", "condiciones"), "Si"),
-        (("acepta", "acepto", "certifica", "declara"), "Si"),
-    ]
 
-    def __init__(self, driver: WebDriver, wait: WebDriverWait, settings: Settings, tracker=None) -> None:
-        self.driver = driver
-        self.wait = wait
-        self.settings = settings
-        self.tracker = tracker
-        self.question_answerer = CandidateQuestionAnswerer(settings.candidate_profile_path)
+    SELECTOR_OFERTA = 'a[href*="/empleos/"]'
+    PATRON_APLICAR = re.compile(r"aplicar|postular", re.IGNORECASE)
+    # "Cerrar" no va aqui: es el boton del modal de exito, y cerrarlo antes de
+    # leerlo daba por fallida una postulacion que si habia salido.
+    CIERRES = ("Aceptar", "Entendido", "Ahora no")
+
+    # Campos con id conocido del formulario de datos personales.
+    CAMPOS_CONOCIDOS = ("email", "emailConfirmation", "identificationNumber",
+                        "firstName", "lastName", "phone")
+
+    # Magneto confirma con "Se ha enviado tu aplicacion" en un modal propio.
+    # Buscar solo variantes de "postulacion" daba por fallidos envios que si salieron.
+    CONFIRMACIONES = (
+        "se ha enviado tu aplicacion", "tu aplicacion ha sido enviada", "aplicacion enviada",
+        # Magneto avisa asi cuando la oferta ya estaba postulada: sin estas
+        # marcas el bot la daba por "no disponible" y la volvia a intentar.
+        "ya presentaste el cuestionario", "tu postulacion ha sido enviada",
+        "ya completaste este paso",
+        "postulacion exitosa", "postulacion enviada", "te has postulado",
+        "ya te postulaste", "hemos recibido tu postulacion", "gracias por postularte",
+        "aplicaste a esta oferta", "postulacion registrada",
+    )
+    SEGUNDOS_ESPERANDO_CONFIRMACION = 10
+
+    # Magneto pinta primero un encabezado anonimo y luego lo reemplaza por el
+    # menu del usuario: leerlo antes da un "sin sesion" falso.
+    MARCAS_ANONIMO = ("iniciar sesion", "crear cuenta", "registrate")
+    TEXTO_MINIMO_PAGINA = 200
+    INTENTOS_SESION = 15
+    VUELTAS_MAXIMAS = 8
+
+    def __init__(self, navegador: Navegador, settings: Settings, tracker=None) -> None:
+        super().__init__(navegador, settings, tracker)
+        self.question_answerer = CandidateQuestionAnswerer(
+            settings.candidate_profile_path,
+            ai_client=FreeAiAnswerClient(settings),
+        )
         if self.tracker:
             self.tracker.ensure_questions_table()
 
-    def ensure_logged_in(self) -> None:
-        self.driver.get(f"{self.BASE_URL}/co")
-        self._close_optional_popups()
+    # -------------------------------------------------------------------- sesion
 
-        if self._is_logged_in():
+    def ensure_logged_in(self) -> None:
+        self.abrir(f"{self.BASE_URL}/co")
+        self._cerrar_avisos()
+
+        if self._hay_sesion():
             logging.info("Sesion de Magneto detectada.")
             return
 
-        logging.info("No hay sesion activa en Magneto. Abriendo inicio de sesion.")
-        self._open_login()
-        self._click_google_login_if_available()
-        self._wait_for_login()
+        # Sin sesion, Magneto sirve el formulario anonimo y toda la corrida se
+        # desperdicia. Es preferible detenerse que postular en el vacio.
+        raise RuntimeError(
+            "No hay sesion de Magneto en el navegador. Inicia sesion en la ventana "
+            "abierta por abrir_navegador_bot.ps1 y vuelve a lanzar el bot."
+        )
+
+    def _hay_sesion(self) -> bool:
+        for intento in range(self.INTENTOS_SESION):
+            texto = self._texto_pagina()
+            if len(texto) >= self.TEXTO_MINIMO_PAGINA:
+                plano = lectura.normalizar(texto)
+                if not any(marca in plano for marca in self.MARCAS_ANONIMO):
+                    return True
+                logging.debug("Encabezado aun anonimo (intento %s)", intento + 1)
+            sleep(1)
+        return False
+
+    # ------------------------------------------------------------------ busqueda
 
     def search(self, keyword: str) -> list[JobOffer]:
-        search_url = self._build_search_url(keyword)
-        logging.info("Buscando en Magneto: %s", search_url)
-        self.driver.get(search_url)
-        self._wait_for_results()
-        offers = self._extract_offers(keyword=None)
+        url = f"{self.BASE_URL}/co/trabajos/buscar/{lectura.slug(keyword)}"
+        logging.info("Buscando en Magneto: %s", url)
+        # Una busqueda que no carga no debe tumbar la corrida entera: se sigue
+        # con la siguiente palabra clave.
+        if not self.abrir(url):
+            return []
 
-        if offers:
-            return offers
+        ofertas = self._leer_resultados(filtro=None)
+        if ofertas:
+            return ofertas
 
         logging.info("Busqueda por URL sin resultados. Usando pagina de ciudad para: %s", keyword)
-        self.driver.get(self._build_city_url())
-        self._wait_for_results()
-        return self._extract_offers(keyword=keyword)
+        ciudad = lectura.slug(self.settings.magneto_city)
+        if not self.abrir(f"{self.BASE_URL}/co/trabajos/ofertas-empleo-en-{ciudad}/"):
+            return []
+        return self._leer_resultados(filtro=keyword)
+
+    def _leer_resultados(self, filtro: str | None) -> list[JobOffer]:
+        try:
+            self.pagina.wait_for_selector(self.SELECTOR_OFERTA, timeout=15000)
+        except PlaywrightTimeout:
+            logging.info("No se encontraron resultados visibles en la busqueda actual.")
+            return []
+
+        ofertas: list[JobOffer] = []
+        vistas: set[str] = set()
+
+        for enlace in self.pagina.query_selector_all(self.SELECTOR_OFERTA):
+            url = canonicalize_url(urljoin(self.BASE_URL, enlace.get_attribute("href") or ""))
+            if not url or url in vistas:
+                continue
+
+            texto = self._texto_tarjeta(enlace)
+            if not lectura.es_ubicacion_valida(texto, self.settings.locations):
+                continue
+            if filtro and not lectura.coincide_con_busqueda(texto, filtro):
+                continue
+
+            ofertas.append(JobOffer(
+                title=lectura.limpiar(enlace.inner_text()) or lectura.titulo(texto),
+                company=lectura.empresa(texto),
+                url=url,
+                published_at=lectura.fecha(texto),
+                city=lectura.ciudad(texto, self.settings.locations),
+                salary=lectura.salario(texto),
+                description=lectura.limpiar(texto),
+            ))
+            vistas.add(url)
+
+        logging.info("Ofertas extraidas de Magneto: %s", len(ofertas))
+        return ofertas
+
+    @staticmethod
+    def _texto_tarjeta(enlace) -> str:
+        """El texto de la tarjeta completa, no solo el del enlace."""
+        js = """
+            enlace => {
+                let caja = enlace.parentElement;
+                for (let i = 0; i < 4 && caja; i += 1) {
+                    if ((caja.innerText || '').length > 60) return caja.innerText;
+                    caja = caja.parentElement;
+                }
+                return enlace.innerText || '';
+            }
+        """
+        try:
+            return (enlace.evaluate(js) or "").strip()
+        except Exception:
+            return (enlace.inner_text() or "").strip()
+
+    # ---------------------------------------------------------------- postulacion
 
     def apply(self, offer: JobOffer) -> str:
         logging.info("Abriendo oferta: %s", offer.url)
-        self.driver.get(str(offer.url))
-        self._close_optional_popups()
-
-        try:
-            button = self.wait.until(EC.element_to_be_clickable((By.XPATH, self.APPLY_BUTTON_XPATH)))
-        except TimeoutException:
+        if not self.abrir(str(offer.url)):
             return "no disponible"
+        self._cerrar_avisos()
 
-        button.click()
-        return self._complete_application_flow()
+        if self._ya_postulado():
+            logging.info("La oferta ya figura como postulada.")
+            return "aplicado"
 
-    def _build_search_url(self, keyword: str) -> str:
-        slug = self._slugify(keyword)
-        return f"{self.BASE_URL}/co/trabajos/buscar/{slug}"
+        # La pagina no siempre dice lo que paso: cuando la oferta ya estaba
+        # postulada, Magneto no muestra nada y solo su API lo reporta.
+        with self._escuchar_api() as respuestas:
+            pulsado = self._pulsar_aplicar(respuestas)
+            estado = self._completar_postulacion() if pulsado else "no disponible"
+            return self._veredicto_api(respuestas) or estado
 
-    def _build_city_url(self) -> str:
-        city_slug = self._slugify(self.settings.magneto_city)
-        return f"{self.BASE_URL}/co/trabajos/ofertas-empleo-en-{city_slug}/"
+    # La API que decide la postulacion, y lo que responde cuando ya existe.
+    API_APLICAR = "jobs/v1/jobs/apply"
+    MENSAJE_YA_APLICADA = "ya ha sido aplicada anteriormente"
 
-    def _wait_for_results(self) -> None:
-        try:
-            self.wait.until(lambda driver: len(driver.find_elements(By.XPATH, self.JOB_LINK_XPATH)) > 0)
-        except TimeoutException:
-            logging.info("No se encontraron resultados visibles en la búsqueda actual.")
+    @contextmanager
+    def _escuchar_api(self):
+        """Recoge lo que responde la API de postulacion mientras dura el intento."""
+        respuestas: list[tuple[int, str]] = []
 
-    def _extract_offers(self, keyword: str | None) -> list[JobOffer]:
-        offers: list[JobOffer] = []
-        seen_urls: set[str] = set()
-
-        for link in self.driver.find_elements(By.XPATH, self.JOB_LINK_XPATH):
-            url = urljoin(self.BASE_URL, link.get_attribute("href") or "")
-            if not url or url in seen_urls:
-                continue
-
-            text = self._extract_offer_text(link)
-            if not self._matches_any_location(text):
-                continue
-            if keyword and not self._matches_keyword(text, keyword):
-                continue
-
-            offers.append(
-                JobOffer(
-                    title=self._clean_text(link.text) or self._extract_title(text),
-                    company=self._extract_company(text),
-                    url=url,
-                    published_at=self._extract_date(text),
-                    city=self._extract_city(text),
-                    salary=self._extract_salary(text),
-                    description=self._clean_text(text),
-                )
-            )
-            seen_urls.add(url)
-
-            if len(offers) >= self.settings.max_offers:
-                break
-
-        logging.info("Ofertas extraídas de Magneto: %s", len(offers))
-        return offers
-
-    def _close_optional_popups(self) -> None:
-        close_selectors = [
-            "//button[contains(@aria-label, 'Cerrar') or contains(@aria-label, 'Close')]",
-            "//button[contains(., 'Aceptar')]",
-            "//button[contains(., 'Entendido')]",
-            "//button[contains(., 'Ahora no')]",
-        ]
-        for selector in close_selectors:
-            for button in self.driver.find_elements(By.XPATH, selector):
-                if button.is_displayed() and button.is_enabled():
-                    button.click()
-
-    def _open_login(self) -> None:
-        for button in self.driver.find_elements(By.XPATH, self.LOGIN_LINK_XPATH):
-            if button.is_displayed() and button.is_enabled():
-                button.click()
+        def anotar(respuesta) -> None:
+            if self.API_APLICAR not in respuesta.url:
                 return
-        self.driver.get(f"{self.BASE_URL}/co/login")
+            try:
+                respuestas.append((respuesta.status, respuesta.text()[:300]))
+            except Exception:
+                respuestas.append((respuesta.status, ""))
 
-    def _click_google_login_if_available(self) -> None:
+        self.pagina.on("response", anotar)
         try:
-            google_button = WebDriverWait(self.driver, 10).until(
-                EC.element_to_be_clickable((By.XPATH, self.GOOGLE_LOGIN_XPATH))
-            )
-            google_button.click()
-        except TimeoutException:
-            logging.info("No se encontro boton de Google. Esperando inicio manual.")
+            yield respuestas
+        finally:
+            try:
+                self.pagina.remove_listener("response", anotar)
+            except Exception:
+                pass
 
-    def _wait_for_login(self) -> None:
-        WebDriverWait(self.driver, self.settings.login_wait_seconds).until(lambda _: self._is_logged_in())
-        logging.info("Sesion iniciada correctamente.")
-
-    def _is_logged_in(self) -> bool:
-        text = self._normalize_for_match(self.driver.find_element(By.TAG_NAME, "body").text)
-        if "iniciar sesion" in text or "crear cuenta" in text:
-            return False
-        return True
-
-    def _extract_offer_text(self, link) -> str:
-        try:
-            card = link.find_element(
-                By.XPATH,
-                './ancestor::*[self::article or self::li or self::div][.//a[contains(@href, "/empleos/")]][1]',
-            )
-            return card.text.strip()
-        except Exception:
-            return self._clean_text(link.text)
-
-    def _complete_application_flow(self) -> str:
-        clicked_submit = False
-        stalled_iterations = 0
-        self._wait_for_application_panel()
-
-        for _ in range(12):
-            self._close_optional_popups()
-            self._attach_cv_if_requested()
-            answered = self._answer_visible_questions()
-            clicked = self._click_next_application_button()
-
-            if clicked in {"Enviar respuestas", "Finalizar", "Postularme", "Aplicar", "Enviar"}:
-                clicked_submit = True
-
-            if not answered and not clicked:
-                break
-
-            if answered and not clicked:
-                stalled_iterations += 1
-                if stalled_iterations >= 2:
-                    logging.info("Formulario detenido: respuestas dadas pero no hay boton de avance habilitado.")
-                    break
-            else:
-                stalled_iterations = 0
-
-            sleep(1)
-
-        return "aplicado" if clicked_submit else "no disponible"
-
-    def _wait_for_application_panel(self) -> None:
-        try:
-            WebDriverWait(self.driver, 8).until(
-                lambda _: self._page_has_text("responder", "preguntas", "aplicacion", "postulacion")
-            )
-        except TimeoutException:
-            logging.info("No aparecio panel de preguntas; intentando continuar flujo normal.")
-
-    def _answer_visible_questions(self) -> bool:
-        answered = False
-        questions = self._extract_visible_questions()
-
-        for question in questions:
-            decision = self.question_answerer.answer(question["text"], question["options"])
-            
-            if not decision.should_answer or decision.value is None:
-                logging.info(
-                    "❌ Pregunta omitida | razon=%s | pregunta=%s",
-                    decision.reason,
-                    question["text"][:160],
-                )
-                # Registrar en BD incluso si se omite
-                if self.tracker:
-                    try:
-                        self.tracker.record_question(
-                            question["text"][:500],
-                            f"[OMITIDA] {decision.reason}",
-                            decision.confidence
-                        )
-                    except Exception as e:
-                        logging.debug("Error registrando pregunta omitida: %s", e)
-                continue
-
-            if self._answer_question_element(question["element"], decision.value):
-                logging.info(
-                    "✅ Pregunta respondida | respuesta=%s | confianza=%.2f | razon=%s | pregunta=%s",
-                    decision.value,
-                    decision.confidence,
-                    decision.reason,
-                    question["text"][:160],
-                )
-                
-                # Registrar pregunta respondida en BD
-                if self.tracker:
-                    try:
-                        self.tracker.record_question(
-                            question["text"][:500],
-                            str(decision.value)[:200],
-                            decision.confidence
-                        )
-                    except Exception as e:
-                        logging.debug("Error registrando pregunta: %s", e)
-                
-                answered = True
-            else:
-                logging.warning(
-                    "⚠️ No se pudo aplicar respuesta | respuesta=%s | pregunta=%s",
-                    decision.value,
-                    question["text"][:160],
-                )
-
-        return answered
-
-    def _extract_visible_questions(self) -> list[dict]:
-        script = """
-            const normalize = (value) => (value || '').replace(/\\s+/g, ' ').trim();
-            const visible = (element) => {
-              const style = window.getComputedStyle(element);
-              const rect = element.getBoundingClientRect();
-              return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
-            };
-            const actionPattern = /guardar|cancelar|enviar respuestas|continuar|siguiente|finalizar|postular|aplicar/i;
-            const badContainerPattern = /magneto para:|requisitos para aplicar|ofertas de empleo|buscar por cargo|buscar por ubicacion/i;
-            const questionPattern = /\\?|seleccion|respuest|anos|experiencia|salario|aspiracion|modalidad|ciudad|ubicacion|ingles|autoriz|acept|posee|tiene|cuenta|dispon|telefono|celular|correo|documento|cedula|formacion|conocimiento/i;
-            const controlsSelector = 'button, [role="button"], input:not([type="hidden"]):not([type="file"]), textarea, select';
-            const appRoot = Array.from(document.querySelectorAll('aside, section, form, div'))
-              .filter(visible)
-              .filter((element) => /enviar respuestas|solo falta|respuestas|aplicacion|postulacion/i.test(normalize(element.innerText || element.textContent || '')))
-              .sort((a, b) => normalize(a.innerText).length - normalize(b.innerText).length)[0] || document.body;
-
-            const controls = Array.from(appRoot.querySelectorAll(controlsSelector))
-              .filter(visible)
-              .filter((control) => {
-                const text = normalize(control.innerText || control.value || control.getAttribute('aria-label') || control.getAttribute('placeholder'));
-                return !actionPattern.test(text);
-              });
-
-            const containerFor = (control) => {
-              const candidates = [];
-              let node = control;
-              while (node && node !== appRoot && candidates.length < 8) {
-                if (node.nodeType === 1) candidates.push(node);
-                node = node.parentElement;
-              }
-              return candidates
-                .filter((element) => {
-                  const text = normalize(element.innerText || element.textContent || '');
-                  return text.length >= 6 && text.length <= 700 && questionPattern.test(text) && !badContainerPattern.test(text);
-                })
-                .sort((a, b) => normalize(a.innerText).length - normalize(b.innerText).length)[0] || control.parentElement;
-            };
-
-            const questionLike = controls
-              .map((control) => {
-                const element = containerFor(control);
-                const rawText = normalize(element.innerText || element.textContent || control.getAttribute('placeholder') || control.getAttribute('aria-label') || '');
-                const text = rawText
-                  .replace(/\\b\\d+\\s+de\\s+\\d+\\b/gi, '')
-                  .replace(actionPattern, '')
-                  .trim();
-                const localControls = Array.from(element.querySelectorAll(controlsSelector)).filter(visible);
-                const options = localControls
-                  .map((item) => normalize(item.innerText || item.value || item.getAttribute('aria-label') || item.getAttribute('placeholder')))
-                  .filter(Boolean)
-                  .filter((value) => !actionPattern.test(value))
-                  .filter((value) => value.length <= 120);
-                const tag = control.tagName.toLowerCase();
-                const type = tag === 'select' ? 'select' : tag === 'textarea' ? 'text' : (control.getAttribute('role') === 'button' || tag === 'button') ? 'choice' : 'text';
-                return { element, text, options: [...new Set(options)], type };
-              })
-              .filter((item) => item.text.length > 5 && item.text.length <= 700)
-              .filter((item) => questionPattern.test(item.text) && !badContainerPattern.test(item.text));
-
-            const result = [];
-            const seen = new Set();
-            for (const item of questionLike) {
-              const compact = item.text.toLowerCase().replace(/\\s+/g, ' ');
-              if ([...seen].some((value) => value.includes(compact) || compact.includes(value))) continue;
-              seen.add(compact);
-              result.push(item);
-              if (result.length >= 10) break;
-            }
-            return result;
-        """
-        try:
-            return list(self.driver.execute_script(script) or [])
-        except Exception:
-            return []
-
-    def _answer_question_element(self, element, value: str) -> bool:
-        script = """
-            const root = arguments[0];
-            const rawValue = arguments[1];
-            const normalize = (value) => (value || '')
-              .normalize('NFD')
-              .replace(/[\\u0300-\\u036f]/g, '')
-              .replace(/\\s+/g, ' ')
-              .trim()
-              .toLowerCase();
-            const value = normalize(rawValue);
-            const visible = (element) => {
-              const style = window.getComputedStyle(element);
-              const rect = element.getBoundingClientRect();
-              return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
-            };
-            const setNativeValue = (element, value) => {
-              const setter = Object.getOwnPropertyDescriptor(element.__proto__, 'value')?.set;
-              setter ? setter.call(element, value) : element.value = value;
-              element.dispatchEvent(new Event('input', { bubbles: true }));
-              element.dispatchEvent(new Event('change', { bubbles: true }));
-            };
-
-            const clickable = Array.from(root.querySelectorAll('button, [role="button"], label, option'))
-              .filter(visible)
-              .filter((element) => {
-                const text = normalize(element.innerText || element.textContent || element.value || element.getAttribute('aria-label'));
-                if (text === 'guardar' || text.includes('guardar')) return false;
-                if (/cancelar|enviar respuestas|continuar|siguiente|finalizar|postular|aplicar/.test(text)) return false;
-                return text === value || (value.length > 2 && text.includes(value));
-              });
-            if (clickable.length) {
-              clickable[0].scrollIntoView({ block: 'center', inline: 'center' });
-              clickable[0].click();
-              return true;
-            }
-
-            const select = Array.from(root.querySelectorAll('select')).find(visible);
-            if (select) {
-              const option = Array.from(select.options).find((item) => {
-                const text = normalize(item.text || item.value);
-                return text === value || (value.length > 2 && text.includes(value));
-              });
-              if (option) {
-                select.value = option.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                return true;
-              }
-            }
-
-            const input = Array.from(root.querySelectorAll('input:not([type="file"]), textarea'))
-              .filter(visible)
-              .find((element) => !element.disabled && !element.readOnly);
-            if (input) {
-              input.scrollIntoView({ block: 'center', inline: 'center' });
-              input.focus();
-              setNativeValue(input, rawValue);
-              return true;
-            }
-            return false;
-        """
-        try:
-            return bool(self.driver.execute_script(script, element, value))
-        except Exception:
-            return False
-
-    def _click_next_application_button(self) -> str | None:
-        for label in ["Enviar respuestas", "Continuar", "Siguiente", "Finalizar", "Enviar", "Postularme", "Aplicar"]:
-            if self._click_button_by_text([label]):
-                return label
+    def _veredicto_api(self, respuestas: list[tuple[int, str]]) -> str | None:
+        """Traduce la respuesta del servidor, que manda sobre lo que se ve."""
+        for estado, cuerpo in respuestas:
+            if estado < 300:
+                logging.info("La API acepto la postulacion (HTTP %s).", estado)
+                return "aplicado"
+            if self.MENSAJE_YA_APLICADA in lectura.normalizar(cuerpo):
+                logging.info("La API informa que esta oferta ya estaba postulada.")
+                return "aplicado"
+            if estado >= 400:
+                logging.warning("La API rechazo la postulacion (HTTP %s): %s",
+                                estado, cuerpo[:150])
         return None
 
-    def _click_button_by_text(self, labels: list[str]) -> bool:
-        normalized_labels = [self._normalize_for_match(label) for label in labels]
-        script = """
-            const labels = arguments[0];
-            const normalize = (value) => (value || '')
-              .normalize('NFD')
-              .replace(/[\\u0300-\\u036f]/g, '')
-              .replace(/\\s+/g, ' ')
-              .trim()
-              .toLowerCase();
-            const selectors = [
-              'button',
-              'a',
-              '[role="button"]',
-              'input[type="button"]',
-              'input[type="submit"]'
-            ];
-            const elements = Array.from(document.querySelectorAll(selectors.join(',')));
-            const visible = (element) => {
-              const style = window.getComputedStyle(element);
-              const rect = element.getBoundingClientRect();
-              return style.visibility !== 'hidden' && style.display !== 'none' && rect.width > 0 && rect.height > 0;
-            };
+    def _pulsar_aplicar(self, respuestas: list | None = None) -> bool:
+        """Pulsa Aplicar y comprueba que la pagina reacciono.
 
-            for (const element of elements) {
-              const text = normalize(element.innerText || element.value || element.getAttribute('aria-label'));
-              const disabled = element.disabled || element.getAttribute('aria-disabled') === 'true';
-              if (text === 'guardar' || text.includes('guardar')) continue;
-              if (!visible(element) || disabled) continue;
-              if (!labels.some((label) => text === label || (label.length > 2 && text.includes(label)))) continue;
-              element.scrollIntoView({ block: 'center', inline: 'center' });
-              element.click();
-              return true;
-            }
-            return false;
+        La pagina pinta el boton antes de que React le ponga el manejador: al
+        pulsarlo de inmediato el clic se perdia y la oferta quedaba sin abrir el
+        cuestionario. Se espera a que la carga acabe y, si el primer boton no
+        produce nada, se prueba el siguiente.
         """
         try:
-            return bool(self.driver.execute_script(script, normalized_labels))
+            self.pagina.wait_for_load_state("networkidle", timeout=10000)
+        except PlaywrightTimeout:
+            pass
+
+        botones = self.pagina.get_by_role("button", name=self.PATRON_APLICAR)
+        try:
+            cuantos = botones.count()
         except Exception:
+            cuantos = 0
+
+        if not cuantos:
+            logging.info("No hay boton de aplicar visible en la oferta.")
             return False
 
-    def _page_has_text(self, *values: str) -> bool:
-        text = self._normalize_for_match(self.driver.find_element(By.TAG_NAME, "body").text)
-        return any(value in text for value in values)
+        for indice in range(cuantos):
+            try:
+                botones.nth(indice).click(timeout=10000)
+            except Exception as error:
+                logging.debug("boton %s no se pudo pulsar: %s", indice, str(error)[:60])
+                continue
 
-    def _attach_cv_if_requested(self) -> None:
+            if self._hubo_reaccion(respuestas):
+                logging.info("Aplicar pulsado (boton %s de %s).", indice + 1, cuantos)
+                return True
+            logging.info("El boton %s no abrio nada; se prueba el siguiente.", indice + 1)
+
+        logging.info("Ningun boton de aplicar produjo respuesta.")
+        return False
+
+    def _hubo_reaccion(self, respuestas: list | None = None) -> bool:
+        """El clic sirvio si aparece el cuestionario, un formulario o la confirmacion.
+
+        Si la API ya respondio, el clic llego a su destino y esperar mas es
+        tiempo perdido: el veredicto lo da el servidor, no la pantalla.
+        """
+        if respuestas:
+            return True
+        try:
+            self.pagina.wait_for_selector(
+                f'{CuestionarioMagneto.SELECTOR_PREGUNTA_CLASE}, textarea, input#email',
+                timeout=8000)
+            return True
+        except PlaywrightTimeout:
+            return self._postulacion_confirmada()
+
+    def _completar_postulacion(self) -> str:
+        # Hay ofertas sin cuestionario: el clic en Aplicar ya envia la postulacion.
+        if self._esperar_confirmacion(segundos=4):
+            logging.info("POSTULACION CONFIRMADA sin cuestionario")
+            self._cerrar_confirmacion()
+            return "aplicado"
+
+        cuestionario = CuestionarioMagneto(self.pagina)
+        self._esperar_panel()
+
+        respondidas = 0
+        estancado = 0
+        ya_contestadas: set[str] = set()
+
+        for vuelta in range(1, self.VUELTAS_MAXIMAS + 1):
+            logging.info("Vuelta %s/%s del formulario", vuelta, self.VUELTAS_MAXIMAS)
+            self._adjuntar_cv()
+            self._rellenar_datos_personales()
+
+            avanzo = self._responder_pendientes(cuestionario, ya_contestadas)
+            respondidas += avanzo
+
+            if cuestionario.enviar():
+                if self._esperar_confirmacion():
+                    logging.info("POSTULACION CONFIRMADA | preguntas respondidas: %s", respondidas)
+                    self._cerrar_confirmacion()
+                    return "aplicado"
+                self._registrar_estado_tras_enviar()
+                logging.info("Enviado sin confirmacion visible todavia; se revisa otra vuelta.")
+
+            if not avanzo:
+                estancado += 1
+                if estancado >= 2:
+                    estado = cuestionario.estado_envio()
+                    logging.warning(
+                        "Formulario detenido | boton existe=%s habilitado=%s | campos vacios=%s de %s",
+                        estado.existe, estado.habilitado, estado.campos_vacios, estado.campos_totales)
+                    break
+            else:
+                estancado = 0
+            sleep(1)
+
+        return "aplicado" if self._postulacion_confirmada() else "formulario incompleto"
+
+    def _esperar_panel(self) -> None:
+        try:
+            self.pagina.wait_for_selector(
+                'textarea, [class*="jobOfferQuestionnaire_question-title"], input#email',
+                timeout=15000)
+        except PlaywrightTimeout:
+            logging.info("No aparecio panel de preguntas; se intenta el flujo normal.")
+
+    def _responder_pendientes(self, cuestionario: CuestionarioMagneto,
+                              ya_contestadas: set[str]) -> int:
+        """Contesta las preguntas sin responder. Devuelve cuantas quedaron puestas.
+
+        No se repite una pregunta ya contestada en esta postulacion: volver a
+        pulsar una opcion la desmarca, y el formulario no se completa nunca.
+        """
+        puestas = 0
+        for indice, pregunta in enumerate(cuestionario.pendientes(), 1):
+            if pregunta.texto in ya_contestadas:
+                continue
+            decision = self._decidir(pregunta)
+            if not decision.should_answer or decision.value is None:
+                logging.info("  %s. omitida | %s | %s", indice, decision.reason, pregunta.texto[:90])
+                self._registrar(pregunta.texto, f"[OMITIDA] {decision.reason}", decision.confidence)
+                continue
+
+            valor = str(decision.value)
+            puesta = (cuestionario.escribir(pregunta, valor) if pregunta.es_texto_libre
+                      else cuestionario.elegir(pregunta, valor))
+            if puesta:
+                puestas += 1
+                ya_contestadas.add(pregunta.texto)
+                logging.info("  %s. respondida | %s -> %s", indice, pregunta.texto[:60], valor[:60])
+                self._registrar(pregunta.texto, valor, decision.confidence)
+            else:
+                logging.warning("  %s. sin poder responder | %s", indice, pregunta.texto[:90])
+        return puestas
+
+    def _decidir(self, pregunta: Pregunta):
+        """Elige la respuesta, prefiriendo la redactada del perfil en texto libre."""
+        decision = self.question_answerer.answer(pregunta.texto, pregunta.opciones)
+        if pregunta.tipo != "textarea":
+            return decision
+
+        redactada = self.question_answerer.locales.responder(pregunta.texto)
+        if redactada and len(str(decision.value or "")) < 40:
+            logging.info("  campo de texto libre: se usa respuesta redactada del perfil")
+            return type(decision)(redactada, 0.85, "Redactada desde el perfil", True)
+        return decision
+
+    def _registrar(self, pregunta: str, respuesta: str, confianza: float) -> None:
+        if not self.tracker:
+            return
+        try:
+            self.tracker.record_question(pregunta[:500], respuesta[:200], confianza)
+        except Exception as error:
+            logging.debug("no se registro la pregunta: %s", str(error)[:60])
+
+    # --------------------------------------------------------- datos personales
+
+    def _valor_para_campo(self, campo: str) -> str:
+        perfil = self.question_answerer.profile
+        nombre = str(perfil.get("name", "")).split()
+        mitad = (len(nombre) + 1) // 2
+        telefono = "".join(c for c in str(perfil.get("phone", "")) if c.isdigit())
+
+        valores = {
+            "email": perfil.get("email", ""),
+            "emailConfirmation": perfil.get("email", ""),
+            "identificationNumber": str(perfil.get("document_number", "")),
+            "firstName": " ".join(nombre[:mitad]),
+            "lastName": " ".join(nombre[mitad:]),
+            # El formulario pide el numero sin indicativo de pais.
+            "phone": telefono[-10:] if len(telefono) > 10 else telefono,
+        }
+        return str(valores.get(campo, ""))
+
+    def _rellenar_datos_personales(self) -> int:
+        llenados = 0
+        for campo in self.CAMPOS_CONOCIDOS:
+            elemento = self.pagina.query_selector(f"#{campo}")
+            if elemento is None or not elemento.is_visible() or not elemento.is_enabled():
+                continue
+
+            valor = self._valor_para_campo(campo)
+            if not valor:
+                continue
+            if (elemento.input_value() or "").strip() == valor:
+                llenados += 1
+                continue
+
+            try:
+                elemento.fill(valor)
+                elemento.evaluate("c => c.dispatchEvent(new Event('blur', {bubbles: true}))")
+                llenados += 1
+                logging.info("  campo %s -> %s", campo,
+                             valor if campo != "identificationNumber" else "***")
+            except Exception as error:
+                logging.warning("  no se pudo llenar %s: %s", campo, str(error)[:70])
+
+        if llenados:
+            self._marcar_casillas_obligatorias()
+        return llenados
+
+    def _marcar_casillas_obligatorias(self) -> None:
+        """Acepta terminos y tratamiento de datos, que bloquean el avance."""
+        for casilla in self.pagina.query_selector_all("input[type=checkbox]"):
+            try:
+                if casilla.is_visible() and casilla.is_enabled() and not casilla.is_checked():
+                    casilla.check()
+            except Exception:
+                continue
+
+    def _adjuntar_cv(self) -> None:
         if not self.settings.cv_path.exists():
             return
-
-        for file_input in self.driver.find_elements(By.XPATH, "//input[@type='file']"):
+        for entrada in self.pagina.query_selector_all("input[type=file]"):
             try:
-                file_input.send_keys(str(self.settings.cv_path))
+                entrada.set_input_files(str(self.settings.cv_path))
             except Exception:
-                logging.info("No fue posible adjuntar CV en este paso.")
+                logging.debug("No fue posible adjuntar el CV en este paso.")
 
-    @staticmethod
-    def _slugify(value: str) -> str:
-        normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
-        stop_words = {"de", "del", "la", "las", "el", "los", "en", "y", "o"}
-        words = re.findall(r"[a-z0-9]+", normalized.lower())
-        return "-".join(word for word in words if word not in stop_words)
+    # ------------------------------------------------------------------ evidencia
 
-    @classmethod
-    def _contains_city(cls, text: str, city: str) -> bool:
-        return cls._normalize_for_match(city) in cls._normalize_for_match(text)
+    def _postulacion_confirmada(self) -> bool:
+        """Verifica en la pagina que la postulacion realmente salio.
 
-    def _matches_any_location(self, text: str) -> bool:
-        normalized_text = self._normalize_for_match(text)
-        if "colombia" in normalized_text or "remoto" in normalized_text or "teletrabajo" in normalized_text:
-            return True
-        return any(self._normalize_for_match(location) in normalized_text for location in self.settings.locations)
+        Un clic en un boton que dice Aplicar no prueba nada: el boton puede estar
+        deshabilitado o el formulario incompleto. Esto evita marcar como enviadas
+        postulaciones que nunca ocurrieron.
+        """
+        plano = lectura.normalizar(self._texto_pagina())
+        return any(marca in plano for marca in self.CONFIRMACIONES)
 
-    @classmethod
-    def _matches_keyword(cls, text: str, keyword: str) -> bool:
-        normalized_text = cls._normalize_for_match(text)
-        compact_text = normalized_text.replace(" ", "")
-        normalized_keyword = cls._normalize_for_match(keyword)
-        compact_keyword = normalized_keyword.replace(" ", "")
-        keyword_parts = [part for part in re.findall(r"[a-z0-9]+", normalized_keyword) if len(part) > 2]
+    def _esperar_confirmacion(self, segundos: int | None = None) -> bool:
+        """Espera el modal de confirmacion en vez de mirar la pagina una sola vez.
 
-        if compact_keyword in compact_text:
-            return True
+        El modal tarda un momento en aparecer: comprobarlo de inmediato daba por
+        fallida una postulacion que si habia salido.
+        """
+        for _ in range(segundos or self.SEGUNDOS_ESPERANDO_CONFIRMACION):
+            if self._postulacion_confirmada():
+                return True
+            sleep(1)
+        return False
 
-        return all(part in normalized_text for part in keyword_parts)
+    def _cerrar_confirmacion(self) -> None:
+        """Cierra el modal de exito para dejar la pestana lista para la siguiente."""
+        try:
+            boton = self.pagina.get_by_role("button", name="Cerrar")
+            if boton.count():
+                boton.first.click(timeout=3000)
+        except Exception:
+            pass
 
-    @staticmethod
-    def _normalize_for_match(value: str) -> str:
-        return unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii").lower()
+    def _ya_postulado(self) -> bool:
+        plano = lectura.normalizar(self._texto_pagina())
+        return "ya te postulaste" in plano or "ya aplicaste" in plano
 
-    @staticmethod
-    def _clean_text(value: str) -> str:
-        return re.sub(r"\s+", " ", value).strip()
+    def _registrar_estado_tras_enviar(self) -> None:
+        """Deja evidencia de lo que ocurre justo despues de pulsar enviar."""
+        for espera in (1, 3):
+            sleep(espera)
+            lineas = [l.strip() for l in self._texto_pagina().splitlines() if l.strip()]
+            logging.info("  [tras enviar +%ss] url=%s", espera, self.pagina.url[:70])
+            logging.info("  [tras enviar +%ss] pantalla: %s", espera, " | ".join(lineas[:8])[:220])
 
-    @staticmethod
-    def _extract_title(text: str) -> str:
-        return text.split(" - ")[0].split("|")[0].strip() or "Cargo no especificado"
+            errores = [e.inner_text().strip()[:70]
+                       for e in self.pagina.query_selector_all(
+                           '[class*="error"], [class*="invalid"], [role="alert"]')
+                       if e.is_visible() and (e.inner_text() or "").strip()]
+            if errores:
+                logging.warning("  [tras enviar] MENSAJES DE ERROR: %s", errores[:4])
 
-    @staticmethod
-    def _extract_company(text: str) -> str:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        if len(lines) >= 3:
-            return lines[2].split("|")[0].strip()
-        parts = [part.strip() for part in re.split(r"\s+\|\s+", text) if part.strip()]
-        if len(parts) >= 3:
-            return parts[2]
-        return "No especificada"
+        try:
+            self.pagina.screenshot(path="tras_enviar.png")
+            logging.info("  [tras enviar] captura guardada en tras_enviar.png")
+        except Exception:
+            pass
 
-    @staticmethod
-    def _extract_date(text: str) -> str:
-        match = re.search(r"\b(20\d{2}-\d{2}-\d{2}|\d{1,2}/\d{1,2}/20\d{2}|Hace\s+\d+\s+\w+)\b", text, re.IGNORECASE)
-        return match.group(1) if match else "No especificada"
+    # --------------------------------------------------------------------- apoyo
 
-    @staticmethod
-    def _extract_salary(text: str) -> str:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        for line in lines:
-            if "$" in line or "salario" in line.lower() or "convenir" in line.lower():
-                return line
-        return "No especificado"
+    def _texto_pagina(self) -> str:
+        try:
+            return self.pagina.inner_text("body")
+        except Exception:
+            return ""
 
-    def _extract_city(self, text: str) -> str:
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        location_markers = {
-            "bogota": "Bogota",
-            "medellin": "Medellin",
-            "cali": "Cali",
-            "barranquilla": "Barranquilla",
-            "bucaramanga": "Bucaramanga",
-            "manizales": "Manizales",
-            "colombia": "Colombia",
-            "remoto": "Remoto",
-            "teletrabajo": "Teletrabajo",
-        }
-        configured_locations = [
-            (self._normalize_for_match(location), location)
-            for location in self.settings.locations
-        ]
-        for line in lines:
-            normalized = self._normalize_for_match(line)
-            for normalized_location, display_location in configured_locations:
-                if normalized_location in normalized:
-                    return display_location
-            for marker, display_location in location_markers.items():
-                if marker in normalized:
-                    return display_location
-        return "No especificada"
+    def _cerrar_avisos(self) -> None:
+        for etiqueta in self.CIERRES:
+            boton = self.pagina.get_by_role("button", name=etiqueta)
+            try:
+                if boton.count() and boton.first.is_visible():
+                    boton.first.click(timeout=2000)
+            except Exception:
+                continue
