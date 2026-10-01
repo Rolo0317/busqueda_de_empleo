@@ -1,0 +1,123 @@
+/* Panel de operacion. Hereda el mundo Medallon (ver DESIGN.md en la raiz):
+   el oro marca solo lo que califica, el bronce el dato verificable, la plata
+   lo secundario. Superficie Operate: la tarea manda sobre la expresion. */
+
+.pantalla{
+  max-width:760px;margin:0 auto;
+  padding:40px 20px 64px;
+  display:flex;flex-direction:column;gap:18px;
+}
+.pantalla:not(.ancho){max-width:440px}
+
+/* --- Barra superior --- */
+
+.barra{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+.barra h1{font-size:19px;font-weight:700;letter-spacing:-0.015em}
+.sesion{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--plata)}
+
+/* --- Bloques --- */
+
+.tarjeta{
+  background:#fff;border:1px solid var(--filete);border-radius:2px;
+  padding:22px;display:flex;flex-direction:column;gap:14px;
+}
+.tarjeta h1{font-size:21px;font-weight:700;letter-spacing:-0.015em}
+.tarjeta h2{
+  font-size:12px;font-weight:700;letter-spacing:0.16em;text-transform:uppercase;
+  color:var(--plata);padding-bottom:6px;border-bottom:1px solid var(--filete);
+}
+
+.apoyo{font-size:13.5px;color:var(--plata);line-height:1.5}
+label{display:block;font-size:13px;font-weight:600;color:var(--plata)}
+
+.error{
+  font-size:14px;color:var(--peligro);font-weight:600;
+  border-left:2px solid var(--peligro);padding-left:10px;
+}
+
+/* --- Resumen numerico --- */
+
+.estado{display:flex;flex-wrap:wrap;gap:10px 30px}
+.estado dt{font-size:11.5px;letter-spacing:0.1em;text-transform:uppercase;color:var(--plata);font-weight:600}
+.estado dd{font-size:20px;font-weight:700;margin-top:2px;letter-spacing:-0.01em}
+.estado dd.vivo{color:var(--bronce)}
+
+/* --- Filtros --- */
+
+.filtros{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.filtros input[type="search"]{flex:1;min-width:200px;margin-top:0}
+.casilla{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plata);white-space:nowrap;cursor:pointer}
+.casilla input{width:auto;margin-top:0;min-height:auto}
+
+.chips{display:flex;gap:7px;flex-wrap:wrap}
+.chip{
+  background:transparent;color:var(--plata);
+  border:1px solid var(--filete);border-radius:2px;
+  padding:6px 13px;font-size:12.5px;font-weight:600;min-height:34px;
+}
+.chip:hover:not(:disabled){background:transparent;border-color:var(--plata);color:var(--tinta)}
+.chip.activo{background:var(--tinta);border-color:var(--tinta);color:var(--papel)}
+
+/* --- Listado --- */
+
+.vacantes{list-style:none;display:flex;flex-direction:column}
+.vacantes li{display:flex;gap:13px;padding:12px 0;border-top:1px solid var(--filete)}
+.vacantes li:first-child{border-top:none}
+
+.puntaje{
+  flex-shrink:0;width:42px;height:42px;border-radius:2px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:14.5px;font-weight:700;
+  background:#F1F3F5;color:var(--plata);
+}
+.puntaje.alto{background:var(--tinta);color:var(--oro)}
+
+.detalle{min-width:0;flex:1}
+.detalle a{color:var(--tinta);font-weight:600;font-size:14.5px;text-decoration:none;line-height:1.35}
+.detalle a:hover{text-decoration:underline}
+.detalle p{font-size:13px;color:var(--plata);margin-top:3px}
+
+.meta{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
+.salario{color:var(--bronce);font-weight:600}
+.fuente{font-size:11.5px;letter-spacing:0.06em;text-transform:uppercase}
+.sello{
+  font-size:11px;letter-spacing:0.06em;text-transform:uppercase;font-weight:700;
+  color:var(--papel);background:var(--plata);padding:1px 7px;border-radius:2px;
+}
+
+/* --- Vacio y carga --- */
+
+.vacio{
+  border-top:1px solid var(--filete);padding-top:16px;
+  display:flex;flex-direction:column;align-items:flex-start;gap:12px;
+}
+.vacio p{font-size:14px;color:var(--plata)}
+
+.cargando .barra{display:block;height:11px;background:#EDEFF2;border-radius:2px;margin-bottom:7px}
+.barra-ancha{width:72%}
+.barra-media{width:44%}
+.puntaje.hueco{background:#EDEFF2}
+.cargando{animation:latido 1.4s ease-in-out infinite}
+
+@keyframes latido{0%,100%{opacity:1}50%{opacity:.55}}
+
+/* --- Ejecucion --- */
+
+.confirmar{border-top:1px solid var(--filete);padding-top:14px;display:flex;flex-direction:column;gap:12px}
+.confirmar p{font-size:14px}
+.acciones{display:flex;gap:10px;flex-wrap:wrap}
+
+/* --- Pantallas angostas --- */
+
+@media (max-width:520px){
+  .pantalla{padding:24px 16px 48px}
+  .estado{gap:10px 20px}
+  .estado dd{font-size:18px}
+  .filtros input[type="search"]{min-width:0}
+}
+
+/* --- Movimiento reducido --- */
+
+@media (prefers-reduced-motion:reduce){
+  *, *::before, *::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
+}

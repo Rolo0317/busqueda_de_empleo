@@ -1,457 +1,158 @@
-# Bot de Búsqueda de Empleo Automatizado
+# Bot de búsqueda de empleo
 
-Sistema automatizado de búsqueda y postulación de empleos en Magneto365 con dashboard en tiempo real.
+Busca ofertas en **Magneto** y **Computrabajo** (Colombia), descarta las que no encajan con tu perfil, contesta los cuestionarios de postulación con tus datos reales y se postula por ti. Guarda todo en MySQL para no repetir ofertas y para que veas qué se envió.
 
-![Estado](https://img.shields.io/badge/estado-activo-brightgreen)
-![Python](https://img.shields.io/badge/Python-3.10+-blue)
-![Node.js](https://img.shields.io/badge/Node.js-18+-green)
-![MySQL](https://img.shields.io/badge/MySQL-8.0+-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
+Funciona sobre **tu propio navegador Edge**, con tu sesión iniciada: no guarda tus contraseñas de Magneto ni de Computrabajo.
 
----
+## Qué hace
 
-## 🎯 Características Principales
+- Busca por las palabras clave que configures, en varias páginas de resultados.
+- Filtra cargos que no son tu oficio, que están por debajo de tu nivel, que piden tecnologías que no tienes o que quedan en otra ciudad (si no aceptas reubicarte).
+- Responde preguntas abiertas, de opción múltiple, desplegables y de "sí/no" a partir de tu perfil. Si no tienes una tecnología, lo dice; nunca inventa experiencia.
+- Confirma que la postulación realmente quedó enviada antes de darla por hecha.
+- Opcional: usa Gemini o Groq (gratis) para preguntas abiertas que el perfil no cubre.
+- Opcional: un panel web (Django + React) para ver las vacantes y lanzar el bot.
 
-- ✅ **Búsqueda Automatizada** en Magneto365
-- ✅ **Análisis Inteligente** de ofertas con puntuación de coincidencia
-- ✅ **Postulación Automática** a ofertas calificadas
-- ✅ **Respuesta de Preguntas** durante el proceso de aplicación
-- ✅ **Dashboard en Tiempo Real** con estadísticas
-- ✅ **Base de Datos MySQL** para persistencia
-- ✅ **Actualización en Vivo** con Server-Sent Events (SSE)
-- ✅ **Renovación Automática** de sesión
-- ✅ **Logging Detallado** para debugging
+## Antes de usarlo
 
----
+- **Tu perfil es lo que el bot dice de ti.** Todo lo que pongas en `candidate_profile.json` lo afirmará ante las empresas. Escribe solo lo que puedas defender en una entrevista.
+- **Empieza en modo supervisado** (`SUPERVISED_APPLY=true`, el valor por defecto): el bot te muestra cada oferta y te pregunta antes de postular. Una postulación enviada no se puede retirar.
+- Úsalo con moderación y respeta los términos de uso de cada plataforma.
+- El bot no presenta pruebas psicotécnicas ni evaluaciones: esas las haces tú.
 
-## 📋 Requisitos Previos
+## Requisitos
 
-### Obligatorio:
-- **Windows 10/11** (compatible con Linux con ajustes)
-- **Python 3.10+** 
-- **Node.js 18+**
-- **MySQL 8.0+**
-- **Microsoft Edge** (navegador principal) o **Chrome**
-- **Git** (para clonar el repositorio)
+- Windows 10 u 11 con **Microsoft Edge**.
+- **Python 3.11** o superior.
+- **MySQL 8** o superior.
+- Una cuenta en Magneto y/o Computrabajo, con tu hoja de vida cargada.
+- Node.js 20+ solo si quieres el panel web o generar tu hoja de vida con `cv_builder`.
 
-### Cuenta Magneto365:
-- Una cuenta activa en [magneto365.com](https://www.magneto365.com)
-- Sesión iniciada en tu navegador (el bot reutilizará esta sesión)
+## Instalación
 
----
-
-## 🚀 Instalación Rápida
-
-### 1. Clonar el Repositorio
-
-```bash
+```powershell
 git clone https://github.com/Rolo0317/busqueda_de_empleo.git
 cd busqueda_de_empleo
+.\instalar.ps1
 ```
 
-### 2. Configurar Base de Datos MySQL
+`instalar.ps1` crea el entorno virtual, instala las dependencias, crea tu `.env` y tu `candidate_profile.json` a partir de las plantillas y corre las pruebas. Puedes volver a correrlo: nunca sobrescribe tu configuración.
 
-```bash
-# En terminal de MySQL o MySQL Workbench
-CREATE DATABASE job_bot;
-CREATE USER 'bot_user'@'localhost' IDENTIFIED BY 'tu_contraseña_segura';
-GRANT ALL PRIVILEGES ON job_bot.* TO 'bot_user'@'localhost';
-FLUSH PRIVILEGES;
+Si PowerShell no deja ejecutar scripts, abre PowerShell y corre una vez:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 ```
 
-O usar el script automático de Node:
+Luego crea la base de datos:
 
-```bash
-cd magneto_job_system
-npm run init-db
-cd ..
+```powershell
+mysql -u root -p < job_bot\database\schema.sql
 ```
 
-### 3. Configurar Python
+## Configuración
 
-```bash
+### 1. `.env` (en la raíz)
+
+| Variable | Para qué sirve |
+|---|---|
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexión a MySQL |
+| `MAGNETO_SEARCH_KEYWORDS` | Palabras clave separadas por comas: `analista de datos,python,sql` |
+| `PLATFORMS` | `magneto`, `computrabajo` o ambas separadas por coma |
+| `CV_PATH` | Ruta completa al PDF de tu hoja de vida |
+| `MIN_MATCH_SCORE` | Puntaje mínimo (0–100) para postular a una oferta |
+| `MAX_OFFERS` | Tope de postulaciones por corrida; `0` es sin tope |
+| `SUPERVISED_APPLY` | `true`: te pregunta antes de cada postulación |
+| `RUN_CONTINUOUSLY`, `LOOP_INTERVAL_SECONDS` | Correr en ciclos y cada cuánto |
+| `GEMINI_API_KEY` / `GROQ_API_KEY` | Opcionales, para preguntas abiertas con IA |
+
+### 2. `job_bot/candidate_profile.json`
+
+Es tu perfil. Parte de la plantilla `candidate_profile.example.json` (una persona ficticia) y reemplaza todo:
+
+- **Datos de contacto:** `name`, `email`, `phone`, `city`, `minimum_salary_cop`.
+- **`availability`:** modalidades que aceptas; `relocation: false` descarta ofertas presenciales en otras ciudades.
+- **`experience_years`:** años por tecnología. Con esto responde "¿cuántos años tienes con X?". Pon `0` en lo que no manejas.
+- **`main_skills`, `experience`, `education`, `certifications`.**
+- **`short_texts`:** resumen y motivación para preguntas abiertas.
+- **`relatos`:** tus historias para preguntas como "describe un pipeline que hayas construido" o "¿tienes título profesional?". Cada una en español (`es`) y, si quieres, en inglés (`en`).
+- **`cargos`** (opcional): qué cargos buscas y cuáles descartar. Si no la pones, usa listas pensadas para perfiles de datos y desarrollo.
+- **`never_answer_keywords`:** temas sensibles que el bot nunca contesta (salud, deudas…).
+
+Este archivo está en `.gitignore`: no se sube al repositorio.
+
+## Uso
+
+```powershell
+.\abrir_navegador_bot.ps1   # abre el Edge del bot
+```
+
+La primera vez, **inicia sesión en Magneto y en Computrabajo** en esa ventana. No la cierres: el bot trabaja dentro de ella. La sesión queda guardada en `job_bot\.edge-bot\` para las próximas veces.
+
+```powershell
+.\ejecutar_bot.ps1          # busca y postula
+```
+
+El resumen de cada ciclo aparece en la consola y en `job_bot\bot.log`.
+
+### Postular a una sola oferta (Magneto)
+
+```powershell
 cd job_bot
-python -m venv .venv
-.\.venv\Scripts\activate
-pip install -r requirements.txt
+.venv\Scripts\python.exe prueba_una_oferta.py <url-de-la-oferta>
 ```
 
-### 4. Configurar Variables de Entorno
+**Sí envía la postulación**, pero solo a esa oferta, mostrando cada pregunta y la respuesta que dio. Sirve para revisar cómo responde el bot después de editar tu perfil.
 
-Copiar y completar los archivos `.env`:
+### Panel web (opcional)
 
-```bash
-# Python Bot
-cp job_bot\.env.example job_bot\.env
-# Editar con tus valores
-
-# Node Dashboard  
-cp magneto_job_system\.env.example magneto_job_system\.env
-# Editar con tus valores
+```powershell
+cd frontend; npm install; cd ..
+.\ver_vacantes.ps1          # backend en :8001, panel en http://localhost:5173
 ```
 
-### 5. Configurar Node.js
+## Pruebas
 
-```bash
-cd magneto_job_system
-npm install
-npm run init-db
-cd ..
+```powershell
+Get-ChildItem job_bot\tests\test_*.py | ForEach-Object { job_bot\.venv\Scripts\python.exe $_.FullName }
 ```
 
-### 6. Copiar CV
+No usan tu cuenta, tu navegador ni tu base de datos: corren contra el perfil de ejemplo y páginas locales.
 
-Copiar tu CV a:
-```
-job_bot/cv.pdf
-```
-
-### 7. Crear Perfil de Candidato
-
-Crear archivo `job_bot/candidate_profile.json`:
-
-```json
-{
-  "name": "Tu Nombre",
-  "email": "tu@email.com",
-  "phone": "+57 123 4567890",
-  "location": "Bogota, Colombia",
-  "experience_years": 5,
-  "education": "Ingeniería en Sistemas",
-  "title": "Full Stack Developer",
-  "bio": "Desarrollador con experiencia en React y Node.js"
-}
-```
-
----
-
-## 🎮 Uso
-
-### Opción 1: Iniciar el Bot (Postulación Automática)
-
-```bash
-cd job_bot
-.\run_bot.ps1
-```
-
-**Primer paso:** El bot abrirá Edge y esperará que **inicie sesión en Magneto365** (máximo 180 segundos).
-
-El bot entonces:
-1. ✅ Buscará ofertas con tus palabras clave
-2. ✅ Analizará cada oferta
-3. ✅ Aplicará automáticamente si cumple criterios
-4. ✅ Responderá preguntas si es necesario
-5. ✅ Guardará todo en MySQL
-6. ✅ Renovará la sesión cada 5 ciclos
-
-### Opción 2: Iniciar el Dashboard (Visualización)
-
-```bash
-cd magneto_job_system
-npm run dashboard
-```
-
-Luego abre en tu navegador:
-```
-http://localhost:3000
-```
-
-El dashboard mostrará:
-- 📊 Total de ofertas encontradas
-- ✅ Ofertas aplicadas
-- 📈 Estadísticas en tiempo real
-- 🔍 Búsqueda por palabras clave
-- 📋 Historial de aplicaciones
-
-### Opción 3: Ambos Simultáneamente
-
-Terminal 1:
-```bash
-cd magneto_job_system
-npm run dashboard
-```
-
-Terminal 2:
-```bash
-cd job_bot
-.\run_bot.ps1
-```
-
----
-
-## 🔧 Configuración Avanzada
-
-### Palabras Clave de Búsqueda
-
-En `job_bot/.env`:
-```env
-MAGNETO_SEARCH_KEYWORDS=React Developer,Full Stack,Node.js,TypeScript Engineer
-```
-
-### Filtros Mínimos
-
-```env
-MIN_SALARY=2500000           # Salario mínimo en COP
-MIN_MATCH_SCORE=70           # Puntuación mínima (0-100)
-PRIORITY_SKILLS=React,Node.js,TypeScript
-```
-
-### Velocidad de Ejecución
-
-```env
-WAIT_SECONDS=10              # Esperar entre aplicaciones
-LOOP_INTERVAL_SECONDS=300    # Intervalo entre ciclos (segundos)
-LOGIN_WAIT_SECONDS=180       # Esperar login manual (segundos)
-```
-
-### Modo de Ejecución
-
-```env
-RUN_CONTINUOUSLY=true        # true = loop infinito, false = una sola vez
-```
-
----
-
-## 📁 Estructura del Proyecto
+## Estructura
 
 ```
-busqueda_de_empleo/
-├── job_bot/                          # Bot principal Python
-│   ├── main.py                       # Entrada principal
-│   ├── config.py                     # Configuración
-│   ├── requirements.txt              # Dependencias Python
-│   ├── .env                          # Variables de entorno (NO commitear)
-│   ├── .env.example                  # Plantilla .env
-│   ├── .venv/                        # Virtualenv
-│   ├── bot.log                       # Log del bot
-│   ├── cv.pdf                        # CV del candidato
-│   ├── candidate_profile.json        # Perfil del candidato
-│   ├── browser/
-│   │   └── driver.py                 # Configuración Selenium
-│   ├── models/
-│   │   └── job_offer.py              # Modelo de oferta
-│   ├── platforms/
-│   │   ├── base.py                   # Clase base
-│   │   └── magneto.py                # Implementación Magneto365
-│   └── services/
-│       ├── tracker.py                # Persistencia MySQL
-│       ├── applicant.py              # Lógica de postulación
-│       ├── analyzer.py               # Análisis de ofertas
-│       ├── searcher.py               # Búsqueda de ofertas
-│       └── question_answerer.py      # Respuesta automática
-│
-├── magneto_job_system/               # Dashboard Node.js
-│   ├── server.js                     # Servidor Express
-│   ├── package.json                  # Dependencias Node
-│   ├── .env                          # Variables de entorno
-│   ├── .env.example                  # Plantilla .env
-│   ├── bot.log                       # Log del dashboard
-│   ├── logs/                         # Directorio de logs
-│   ├── database/
-│   │   ├── connection.js             # Pool de conexión MySQL
-│   │   └── init.js                   # Inicialización BD
-│   ├── services/
-│   │   ├── jobRepository.js          # Queries a ofertas
-│   │   ├── logRepository.js          # Queries a logs
-│   │   └── scoringService.js         # Cálculo de puntuaciones
-│   ├── utils/
-│   │   ├── config.js                 # Carga de configuración
-│   │   └── logger.js                 # Sistema de logging
-│   ├── bot/
-│   │   ├── runner.js                 # Runner del bot Node
-│   │   └── browser.js                # Control Playwright
-│   ├── scrapers/
-│   │   └── magnetoScraper.js         # Scraper Magneto365
-│   └── dashboard/
-│       └── public/
-│           ├── index.html            # Frontend
-│           ├── app.js                # Lógica frontend
-│           └── style.css             # Estilos
-│
-├── .env                              # Env raíz (fallback)
-├── .env.example                      # Plantilla raíz
-├── .gitignore                        # Git ignore
-├── README.md                         # Este archivo
-├── AUDITORIA_COMPLETA.md             # Informe de auditoría
-├── AUDITORIA_BOT_EMPLEO.md           # Notas históricas
-└── docker-compose.yml                # (Próximamente)
+instalar.ps1              Instalación en un equipo nuevo
+abrir_navegador_bot.ps1   Abre el Edge del bot (puerto 9222)
+ejecutar_bot.ps1          Lanza el bot
+ver_vacantes.ps1          Panel web
+reset_mysql.ps1           Restablece la clave de root de MySQL (como administrador)
+
+job_bot/
+  main.py                         Ciclo: buscar -> filtrar -> responder -> postular
+  config.py                       Lee .env y el perfil
+  candidate_profile.example.json  Plantilla del perfil
+  browser/navegador.py            Playwright conectado a tu Edge
+  platforms/                      Magneto, Computrabajo y sus cuestionarios
+  services/                       Filtros, respuestas, registro en MySQL
+  database/schema.sql             Esquema de la base de datos
+  tests/                          Pruebas
+backend/, frontend/       Panel web (Django + React)
+cv_builder/               Genera tu hoja de vida en HTML y PDF desde el perfil
 ```
 
----
+Detalles de arquitectura en [DOCS.md](DOCS.md).
 
-## 🔐 Seguridad
+## Privacidad
 
-### ⚠️ IMPORTANTE: Nunca Commitear Secretos
+Nunca subas al repositorio tu `.env`, tu `candidate_profile.json`, la carpeta `job_bot/.edge-bot/` (tiene tus sesiones iniciadas) ni los `bot.log`. Ya están en `.gitignore`.
 
-El `.env` está en `.gitignore`. NUNCA:
-- Hagas push de `.env`
-- Compartas credenciales en GitHub
-- Dejes contraseñas en logs
+## Problemas frecuentes
 
-### Buenas Prácticas:
-
-1. **Copiar `.env.example` a `.env`** y completar con tus valores
-2. **Usar contraseña segura** para MySQL
-3. **No compartir credenciales** públicamente
-4. **Rotar secretos** periódicamente
-
-### Variables de Entorno Críticas:
-
-```env
-DB_PASSWORD=        # 🔴 CRÍTICO - Nunca en GitHub
-DB_USER=            # 🟡 Sensitivo
-CHROME_USER_DATA_DIR= # 🟡 Path personal
-```
-
----
-
-## 🐛 Troubleshooting
-
-### El bot no puede conectar a MySQL
-
-```bash
-# Verificar que MySQL está corriendo
-mysql -h localhost -u root -p
-
-# Verificar credenciales en .env
-# Ejecutar script de inicialización
-npm run init-db
-```
-
-### Error: "No se pudo abrir tu perfil real de Edge"
-
-**Solución:** Cierra todas las ventanas de Edge y desactiva "Edge Startup Boost":
-
-1. Edge → Configuración → Privacidad
-2. Buscar "Startup Boost"
-3. Apagar el toggle
-
-O permitir perfil fallback:
-```env
-ALLOW_BOT_PROFILE_FALLBACK=true
-```
-
-### Bot se detiene o pierde sesión
-
-El bot ahora verifica login cada 5 ciclos automáticamente. Si aún hay problemas:
-
-```env
-LOGIN_WAIT_SECONDS=300    # Aumentar tiempo de espera
-RUN_CONTINUOUSLY=false    # Probar modo una sola vez
-```
-
-### Dashboard no muestra datos
-
-```bash
-# Verificar que MySQL está corriendo
-# Verificar conexión
-curl http://localhost:3000/api/status
-
-# Ver logs del servidor
-tail magneto_job_system/logs/bot.log
-```
-
-### Performance lento
-
-Aumentar intervalo entre ciclos:
-```env
-LOOP_INTERVAL_SECONDS=600    # 10 minutos
-WAIT_SECONDS=20              # Más tiempo entre aplicaciones
-```
-
----
-
-## 📊 Monitoreo
-
-### Ver Logs del Bot
-
-```bash
-# Python
-tail -f job_bot/bot.log
-
-# Node Dashboard
-tail -f magneto_job_system/logs/bot.log
-```
-
-### Verificar Estado MySQL
-
-```bash
-mysql -u root -p job_bot
-SELECT COUNT(*) as total_jobs FROM jobs;
-SELECT COUNT(*) as total_apps FROM applications;
-SELECT status, COUNT(*) FROM jobs GROUP BY status;
-```
-
-### API Status
-
-```bash
-curl http://localhost:3000/api/status
-```
-
----
-
-## 📈 Estadísticas Típicas
-
-Después de una semana de funcionamiento:
-
-```
-Total ofertas encontradas: 150-300
-Ofertas analizadas:        150-300
-Postulaciones enviadas:    30-60
-Tasa de aplicación:        20-40%
-Match score promedio:      72-85
-```
-
----
-
-## 🤝 Contribuir
-
-Las contribuciones son bienvenidas. Para cambios importantes:
-
-1. Fork el proyecto
-2. Crea una rama (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
----
-
-## 📝 Licencia
-
-Este proyecto está bajo la licencia MIT. Ver [LICENSE](LICENSE) para más detalles.
-
----
-
-## ⚠️ Disclaimer
-
-Este bot está diseñado para **automatizar procesos legales** en plataformas que lo permiten. El usuario es responsable de:
-
-- Verificar que Magneto365 permite automation
-- Respetar los términos de servicio
-- No usar para spam o abuso
-- Mantener comportamiento ético
-
----
-
-## 📞 Soporte
-
-Para reportar bugs o solicitar features:
-
-1. Abre un [Issue](https://github.com/Rolo0317/busqueda_de_empleo/issues)
-2. Incluye detalles del problema
-3. Adjunta logs relevantes
-
----
-
-## 🎉 Agradecimientos
-
-- [Selenium](https://www.selenium.dev/) - Automatización de navegador
-- [Express.js](https://expressjs.com/) - Framework web
-- [MySQL](https://www.mysql.com/) - Base de datos
-- [Pydantic](https://pydantic-settings.readthedocs.io/) - Validación Python
-
----
-
-**Última actualización:** Mayo 2026  
-**Mantenedor:** [@Rolo0317](https://github.com/Rolo0317)
-
+| Síntoma | Solución |
+|---|---|
+| "No hay navegador escuchando en el puerto 9222" | Corre primero `.\abrir_navegador_bot.ps1` |
+| "No existe el perfil del candidato" | Copia `candidate_profile.example.json` como `candidate_profile.json` |
+| Una plataforma "queda fuera de esta corrida" | Se cerró la sesión: vuelve a iniciarla en el Edge del bot |
+| Error de conexión a MySQL | Revisa `DB_PASSWORD` en `.env`, o usa `reset_mysql.ps1` |
+| Se salta casi todas las ofertas | Revisa las listas `cargos` de tu perfil y baja `MIN_MATCH_SCORE` |

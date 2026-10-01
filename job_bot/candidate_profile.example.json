@@ -1,0 +1,172 @@
+{
+  "_instrucciones": "Copia este archivo como candidate_profile.json y reemplaza TODO con tus datos reales. El bot responde los formularios con lo que diga aqui: si pones algo que no es cierto, lo afirmara ante la empresa. candidate_profile.json esta en .gitignore y no se sube al repositorio.",
+  "name": "Ana María Pérez Gómez",
+  "email": "ana.perez.ejemplo@correo.com",
+  "phone": "+57 300 000 0000",
+  "city": "Bogotá, D.C., Colombia",
+  "neighborhood": "",
+  "country": "Colombia",
+  "title": "Analista de Datos y Desarrolladora Python",
+  "minimum_salary_cop": 3000000,
+  "availability": {
+    "remote": true,
+    "hybrid": true,
+    "onsite": true,
+    "relocation": false,
+    "travel": false,
+    "start_immediately": true
+  },
+  "languages": {
+    "spanish": "Nativo",
+    "english": "A2"
+  },
+  "experience_years": {
+    "total": 5,
+    "data_analysis": 5,
+    "python": 4,
+    "sql": 5,
+    "power_bi": 3,
+    "excel": 5,
+    "javascript": 1,
+    "html": 1,
+    "css": 1,
+    "apis_rest": 1,
+    "full_stack": 1,
+    "react": 1,
+    "node": 0,
+    "docker": 1,
+    "pandas": 4,
+    "mysql": 5,
+    "postgresql": 1,
+    "redis": 1,
+    "generative_ai": 1,
+    "rpa": 1,
+    "etl": 4,
+    "angular": 0,
+    "dotnet": 0,
+    "leadership": 0
+  },
+  "main_skills": [
+    "Python",
+    "SQL",
+    "Power BI",
+    "Excel Avanzado",
+    "Pandas",
+    "MySQL",
+    "PostgreSQL",
+    "Redis",
+    "JavaScript",
+    "React",
+    "Docker",
+    "APIs REST",
+    "Automatización RPA",
+    "IA Generativa"
+  ],
+  "experience": [
+    {
+      "role": "Analista de Datos",
+      "company": "Empresa Ejemplo de Servicios S.A.S.",
+      "period": "Ene 2023 - Actual",
+      "achievements": [
+        "Automatización de la carga diaria de bases de datos con un robot RPA",
+        "Procesos ETL con Python y SQL para tableros de indicadores en Power BI"
+      ]
+    },
+    {
+      "role": "Auxiliar de Reportes",
+      "company": "Otra Empresa Ejemplo S.A.",
+      "period": "Feb 2021 - Dic 2022",
+      "achievements": [
+        "Reportes operativos diarios en Excel y SQL"
+      ]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Tecnólogo en Análisis y Desarrollo de Software",
+      "institution": "SENA",
+      "year": "2020"
+    }
+  ],
+  "certifications": [
+    "Curso de Python para análisis de datos - Plataforma Ejemplo (40 horas, 2024)"
+  ],
+  "soft_skills": [
+    "Pensamiento analítico",
+    "Resolución de problemas",
+    "Comunicación efectiva",
+    "Trabajo en equipo"
+  ],
+  "safe_booleans": {
+    "accept_data_processing": true,
+    "has_family_in_company": false,
+    "has_conflict_of_interest": false,
+    "has_disability": false,
+    "has_criminal_record": false,
+    "is_currently_student": false,
+    "education_completed": true
+  },
+  "short_texts": {
+    "motivation": "Me interesa aportar mi experiencia en análisis de datos y automatización para mejorar procesos y crecer con el equipo.",
+    "profile_summary": "Soy analista de datos con 5 años de experiencia en Python, SQL y Power BI. Automatizo procesos manuales y construyo tableros que la operación usa a diario.",
+    "strengths": "Me destaco por el pensamiento analítico, la resolución de problemas y la comunicación clara.",
+    "open_question_fallback": "Tengo experiencia en análisis de datos y automatización. Me adapto rápido y busco aportar resultados medibles."
+  },
+  "relatos": {
+    "_ayuda": "Textos que el bot usa para preguntas abiertas. 'es' es obligatorio; 'en' es opcional (si falta se responde en español). Puedes usar {total} (años totales), {web} (años de desarrollo web) y {titulo} (tu primer título). Escribe solo cosas que puedas defender en una entrevista.",
+    "anios": {
+      "es": "{total} años trabajando con datos y software: procesos ETL y automatizaciones RPA con Python y SQL. De esos, {web} año(s) en desarrollo web con React y APIs REST.",
+      "en": "{total} years working with data and software: ETL processes and RPA automation with Python and SQL. Of those, {web} year(s) in web development with React and REST APIs."
+    },
+    "pipeline": {
+      "es": "Construí un robot RPA que carga a diario las bases de datos de la operación sin intervención manual, y procesos ETL con Python y SQL que alimentan los tableros de Power BI.",
+      "en": "I built an RPA bot that loads the operation's databases every day with no manual work, and ETL processes with Python and SQL that feed the Power BI dashboards."
+    },
+    "agentes": {
+      "es": "Construí y puse en producción un robot RPA que reemplazó la carga manual diaria de bases de datos, y uso IA generativa en mi trabajo de análisis.",
+      "en": "I built and ran an RPA bot in production that replaced a daily manual database load, and I use generative AI in my analysis work."
+    },
+    "agentes_controles": {
+      "es": "Los controles que implementé fueron validación de los datos antes de cada carga, registro de cada ejecución y reintentos ante fallos.",
+      "en": "The controls I implemented were input validation before each load, logging of every run and automatic retries on failure."
+    },
+    "proyecto": {
+      "es": "Un tablero de indicadores en Power BI conectado a SQL que reemplazó los reportes manuales de la operación."
+    },
+    "titulo": {
+      "es": "No cuento con título profesional. Mi formación titulada es {titulo}, y tengo {total} años de experiencia en análisis de datos y automatización."
+    },
+    "formacion_complementaria": {
+      "es": "Complementado con cursos certificados de Python para análisis de datos."
+    },
+    "modelos": {
+      "es": "He trabajado sobre todo en analítica descriptiva: indicadores, tendencias y desviaciones. No he puesto modelos de machine learning en producción, pero domino la preparación de datos con Python y SQL."
+    },
+    "resumen": {
+      "en": "{total} years working with data and software: Python, SQL, Power BI and Excel. I build ETL processes, RPA automations and dashboards end to end."
+    }
+  },
+  "cargos": {
+    "_ayuda": "Opcional. Cada lista reemplaza la que trae el bot por defecto (ver job_bot/services/relevancia_cargo.py). Borra esta clave para usar las listas por defecto, pensadas para perfiles de datos y desarrollo.",
+    "objetivo": [
+      "analista de datos", "data analyst", "analista bi", "business intelligence",
+      "power bi", "etl", "python", "sql", "datos", "data", "automatizacion", "rpa"
+    ],
+    "adyacentes": [
+      "reporteria", "indicadores", "kpi", "analista de operaciones"
+    ]
+  },
+  "never_answer_keywords": [
+    "eps",
+    "arl",
+    "fondo de pensiones",
+    "cesantías",
+    "embarazo",
+    "enfermedad",
+    "diagnóstico",
+    "tratamiento médico",
+    "medicamento",
+    "deuda",
+    "cuenta bancaria"
+  ]
+}
