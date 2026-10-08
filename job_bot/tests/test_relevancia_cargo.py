@@ -7,6 +7,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from services.relevancia_cargo import Encaje, RelevanciaDelCargo
 
 CASOS = [
+    # 3 de octubre: el bot postulo a un cupo reservado sin que el perfil aplique.
+    ("Software Development Engineer - Vacante de inclusión para personas en condición de discapacidad",
+     Encaje.RESERVADA),
+    ("Analista de datos - vacante de inclusión", Encaje.RESERVADA),
     ("GRAN OPORTUNIDAD LABORAL - OFRECIMIENTO COMERCIAL - SECTOR FINANCIERO", Encaje.RETROCESO),
     ("Inicia las evaluaciones para el puesto de Desarrollador Backend Junior/Node.js/APIs/SQL", Encaje.OBJETIVO),
     ("Seguimiento de tu candidatura a la vacante Analista workforce GTR", Encaje.ADYACENTE),
@@ -63,7 +67,13 @@ def main() -> int:
         fallos += 0 if ok else 1
         print(f"  [{'ok ' if ok else 'FALLA'}] {texto[:56]:<58} -> {obtenido.encaje.value}")
     print()
-    print(f"  {len(CASOS) - fallos} de {len(CASOS)} correctos")
+    # Con discapacidad declarada en el perfil, esas vacantes si son para el candidato.
+    incluyente = RelevanciaDelCargo(acepta_vacantes_de_inclusion=True)
+    ok = incluyente.valorar(CASOS[0][0]).encaje is Encaje.OBJETIVO
+    fallos += 0 if ok else 1
+    print(f"  [{'ok ' if ok else 'FALLA'}] con discapacidad en el perfil, la vacante de inclusion es objetivo")
+
+    print(f"  {len(CASOS) + 1 - fallos} de {len(CASOS) + 1} correctos")
     return 1 if fallos else 0
 
 

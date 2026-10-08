@@ -98,6 +98,43 @@ CASOS = [
       "I only know Java", "I only know TypeScript", "I am not comfortable with either"],
      lambda r: "java" not in r.lower().replace("typescript", "") and "both" not in r.lower(),
      "una opcion que no afirme Java"),
+    # Magneto, 3 de octubre: "minimo N anos" se compara con los anos del perfil
+    # (ejemplo: analisis de datos 5, Python 4, Power BI 3, React 1).
+    ("¿Cuenta con mínimo 3 años de experiencia en análisis de datos?", ["Sí", "No"],
+     lambda r: r == "Sí", "Sí (5 anos de analisis de datos)"),
+    ("¿Tienes al menos 8 años de experiencia en análisis de datos?", ["Sí", "No"],
+     lambda r: r == "No", "No (tiene 5, piden 8)"),
+    ("¿Más de 4 años con Python?", ["Sí", "No"],
+     lambda r: r == "No", "No (tiene exactamente 4)"),
+    ("¿Cuenta con mínimo tres años en Power BI?", ["Sí", "No"],
+     lambda r: r == "Sí", "Sí (3 anos, escrito en letras)"),
+    ("¿Mínimo 2 años con React?", ["Sí", "No"],
+     lambda r: r == "No", "No (tiene 1)"),
+    # Computrabajo, 3 de octubre: condiciones de contrato y SQL de otro motor.
+    ("¿Aceptas que el contrato sea fijo a 6 meses con posibilidad de renovación?", ["Si", "No"],
+     lambda r: r == "Si", "Si (el perfil acepta contratos a termino fijo)"),
+    ("¿Cuánto tiempo de experiencia tiene en estos conocimientos avanzados en Oracle PL/SQL, SQL?",
+     ["1 año", "1año y medio", "Mas de 2 años"],
+     None, "sin responder: no presentar los anos de SQL como si fueran de Oracle"),
+    ("¿Está de acuerdo con la modalidad de trabajo híbrida?", ["Si", "No"],
+     lambda r: r == "Si", "Si (el perfil acepta hibrido)"),
+    ("¿Está de acuerdo con la asignación económica definida para el cargo?", ["Si", "No"],
+     lambda r: r == "Si", "Si (aceptar la condicion para seguir en el proceso)"),
+    ("¿Tienes experiencia con modelos de machine learning en producción?", ["Si", "No"],
+     lambda r: r == "No", "No (no lo confunde con una pregunta de modalidad)"),
+    ("Cuentas con disponibilidad de ingreso inmediato?", ["Si", "No"],
+     lambda r: r == "Si", "Si (start_immediately del perfil)"),
+    ("¿Cuánto tiempo de experiencia tienes en análisis comercial, inteligencia de negocios "
+     "o gestión de información?", [],
+     lambda r: r.strip() == "5", "5 (anos de analisis de datos), no el parrafo de resumen"),
+    ("¿En qué ciudad vives actualmente?", [],
+     lambda r: "bogot" in r.lower(), "la ciudad del perfil, no un No"),
+    ("¿En qué ciudad vives actualmente?", ["Bogotá", "Medellín", "Cali"],
+     lambda r: r == "Bogotá", "la opcion de su ciudad"),
+    ("Cuenta con 1 a 2 años de experiencia reciente y certificada en el cargo", ["Si", "No"],
+     lambda r: r == "Si", "Si (5 anos en total)"),
+    ("Tiene experiencia realizando dashboard?", ["Si", "No"],
+     lambda r: r == "Si", "Si (tableros en Power BI)"),
     ("What is your english level?", ["A1", "A2", "B1", "B2", "C1", "C2"],
      lambda r: r == "A2", "A2"),
     ("¿Qué experiencia tiene manejando flujos de integración continua y despliegue continuo (CI/CD)?", [],
@@ -115,7 +152,10 @@ def main() -> int:
     for pregunta, opciones, cumple, esperado in CASOS:
         decision = respondedor.answer(pregunta, opciones)
         respuesta = str(decision.value or "")
-        ok = decision.should_answer and cumple(respuesta)
+        # Sin comprobacion (None) se espera que la deje sin responder: hay
+        # preguntas donde cualquier opcion seria una afirmacion falsa.
+        ok = (not decision.should_answer if cumple is None
+              else decision.should_answer and cumple(respuesta))
         if not ok:
             fallos += 1
         print(f"  [{'ok   ' if ok else 'FALLA'}] {pregunta[:52]:<54}")

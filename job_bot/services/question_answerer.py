@@ -6,8 +6,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 from services.anios_tecnologia import anios_de
+from services.criterio_situacional import elegir as elegir_por_criterio
 from services.eleccion_opciones import EleccionDeOpciones
 from services.respuestas_locales import RespuestasLocales
+from services.zona import AREAS
 
 
 @dataclass(frozen=True)
@@ -43,11 +45,29 @@ class CandidateQuestionAnswerer:
         residencia = self._answer_residence(normalized)
         if residencia.should_answer:
             if options and residencia.value:
-                elegida = self._match_boolean_option(options, normalized_options,
-                                                     residencia.value, residencia.reason)
+                # Si/No se casa con opciones booleanas; la ciudad, con la opcion que la nombra.
+                elegida = (self._match_boolean_option(options, normalized_options,
+                                                      residencia.value, residencia.reason)
+                           if residencia.value in ("Si", "No")
+                           else self._match_option(options, normalized_options,
+                                                   self._formas_ciudad(), residencia.reason))
                 if elegida.should_answer:
                     return elegida
             return residencia
+
+        # Condiciones que el perfil declara: se contestan antes que el "No"
+        # conservador, que descartaba al candidato por cosas que si acepta.
+        for regla in (self._answer_contract_terms, self._answer_immediate_start,
+                      self._answer_work_mode, self._answer_offered_salary):
+            condicion = regla(normalized)
+            if not condicion.should_answer:
+                continue
+            if options:
+                elegida = self._match_boolean_option(options, normalized_options,
+                                                     condicion.value, condicion.reason)
+                if elegida.should_answer:
+                    return elegida
+            return condicion
 
         escala = self.locales.responder(raw_question) if self._es_escala(normalized) else None
         if escala:
@@ -61,6 +81,12 @@ class CandidateQuestionAnswerer:
                 if option_answer.should_answer:
                     return option_answer
             return boolean_answer
+
+        # Las preguntas de criterio piden un enfoque, no un dato: si se dejan a la
+        # regla de tecnologias, gana la opcion que nombra una herramienta conocida.
+        criterio = elegir_por_criterio(raw_question, options)
+        if criterio:
+            return AnswerDecision(criterio[0], 0.85, criterio[1], True)
 
         # If the field is a finite choice, never fall through to free-text/numeric
         # answers. This prevents typing "5" into a Si/No style question.
@@ -162,8 +188,90 @@ class CandidateQuestionAnswerer:
         if any(parte in question for parte in partes):
             return AnswerDecision("Si", 0.95, f"Reside en {self.profile.get('city')}", True)
 
+        # "¿En que ciudad vives?" no nombra ninguna: pide la ciudad, no un si/no.
+        # Se contestaba "No" (3 de octubre).
+        if not self._nombra_una_ciudad(question):
+            return AnswerDecision(str(self.profile.get("city", "")), 0.95, "Ciudad del perfil", True)
+
         # Menciona otra ciudad: se dice la verdad, y donde si vive.
         return AnswerDecision("No", 0.9, f"Reside en {self.profile.get('city')}", True)
+
+    @staticmethod
+    def _nombra_una_ciudad(question: str) -> bool:
+        return any(re.search(r"(?<![a-z])" + re.escape(lugar) + r"(?![a-z])", question)
+                   for lugares in AREAS.values() for lugar in lugares)
+
+    MARCAS_CONTRATO = ("contrato", "termino fijo", "obra o labor", "obra labor",
+                       "temporal", "prestacion de servicios")
+    MARCAS_ACEPTAR = ("aceptas", "acepta", "estas de acuerdo", "esta de acuerdo", "de acuerdo con",
+                      "te interesa", "le interesa", "estarias dispuesto", "estaria dispuesto")
+
+    MARCAS_INMEDIATA = ("ingreso inmediato", "disponibilidad inmediata", "incorporacion inmediata",
+                        "inicio inmediato", "vinculacion inmediata", "ingresar de inmediato",
+                        "start immediately", "immediate availability")
+
+    def _answer_immediate_start(self, question: str) -> AnswerDecision:
+        """"¿Disponibilidad de ingreso inmediato?" sale de availability.start_immediately.
+
+        Caia en el "No" conservador teniendo disponibilidad inmediata (3 de octubre).
+        """
+        if not self._has_any(question, self.MARCAS_INMEDIATA):
+            return self._skip("No pregunta por ingreso inmediato")
+        disponible = self.profile.get("availability", {}).get("start_immediately")
+        if disponible is None:
+            return self._skip("El perfil no dice si puede ingresar de inmediato")
+        return AnswerDecision("Si" if disponible else "No", 0.9,
+                              "Disponibilidad de ingreso segun el perfil", True)
+
+    MODALIDADES = (("hibrid", "hybrid"), ("presencial", "onsite"), ("remot", "remote"),
+                   ("teletrabajo", "remote"), ("home office", "remote"))
+
+    def _answer_work_mode(self, question: str) -> AnswerDecision:
+        """"¿Esta de acuerdo con la modalidad hibrida?" sale de availability.
+
+        Se contestaba "No" con hybrid = true en el perfil (3 de octubre).
+        """
+        if not self._has_any(question, self.MARCAS_ACEPTAR):
+            return self._skip("No pide aceptar una modalidad")
+        disponibilidad = self.profile.get("availability", {})
+        nombradas = [clave for marca, clave in self.MODALIDADES if marca in question]
+        if not nombradas:
+            return self._skip("No nombra una modalidad")
+        acepta = all(disponibilidad.get(clave, False) for clave in nombradas)
+        return AnswerDecision("Si" if acepta else "No", 0.9,
+                              f"Modalidad segun el perfil: {', '.join(nombradas)}", True)
+
+    MARCAS_SALARIO_OFRECIDO = ("asignacion economica", "salario ofrecido", "salario definido",
+                               "rango salarial", "propuesta salarial", "remuneracion ofrecida",
+                               "salario de", "salario es de", "compensacion ofrecida")
+
+    def _answer_offered_salary(self, question: str) -> AnswerDecision:
+        """"¿Esta de acuerdo con la asignacion economica definida?" -> Si.
+
+        Es aceptar una condicion para seguir en el proceso, no afirmar un hecho;
+        el monto se negocia despues. Quien no quiera aceptar a ciegas lo declara
+        en availability.accept_offered_salary = false.
+        """
+        if not (self._has_any(question, self.MARCAS_SALARIO_OFRECIDO)
+                and self._has_any(question, self.MARCAS_ACEPTAR)):
+            return self._skip("No pide aceptar el salario ofrecido")
+        acepta = self.profile.get("availability", {}).get("accept_offered_salary", True)
+        return AnswerDecision("Si" if acepta else "No", 0.8,
+                              "Acepta el salario ofrecido segun el perfil", True)
+
+    def _answer_contract_terms(self, question: str) -> AnswerDecision:
+        """"¿Aceptas un contrato fijo a 6 meses?" se responde con el perfil.
+
+        Sin esta regla caia en el "No" conservador y descartaba al candidato por
+        una condicion que si acepta (3 de octubre). Quien no acepte contratos
+        temporales lo declara en availability.fixed_term_contract = false.
+        """
+        if not (self._has_any(question, self.MARCAS_CONTRATO)
+                and self._has_any(question, self.MARCAS_ACEPTAR)):
+            return self._skip("No pregunta por condiciones de contrato")
+        acepta = self.profile.get("availability", {}).get("fixed_term_contract", True)
+        return AnswerDecision("Si" if acepta else "No", 0.85,
+                              "Condiciones de contrato segun el perfil", True)
 
     def _answer_agents_boolean(self, question: str) -> AnswerDecision:
         """Preguntas si/no sobre agentes de IA, RPA y automatizacion.
@@ -189,9 +297,47 @@ class CandidateQuestionAnswerer:
         mencion = anios_de(question, self.profile)
         if mencion is not None:
             keyword, value = mencion
-            return AnswerDecision("Si" if value > 0 else "No", 0.9, f"Experiencia registrada en {keyword}: {value:g}", True)
+            return AnswerDecision("Si" if self._cumple(question, value) else "No", 0.9,
+                                  f"Experiencia registrada en {keyword}: {value:g}", True)
 
         return self._skip("Tecnologia no registrada")
+
+    NUMEROS_EN_LETRAS = {"un": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+                         "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10}
+    PATRON_MINIMO = re.compile(
+        r"(minimo|al menos|mas de|mayor a|superior a|at least|more than)\s+"
+        r"(\d+|un|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s*(\+)?\s*"
+        r"(anos|ano|years|year)"
+        r"|(\d+)\s*(\+|o mas)?\s*(anos|years)\s*(o mas|or more|\+)?"
+    )
+
+    @classmethod
+    def _anios_exigidos(cls, question: str) -> tuple[float, bool] | None:
+        """El minimo de anos que pide la pregunta y si es estricto ("mas de 3").
+
+        Sin esto, "al menos 8 anos?" se contestaba "Si" con 6 registrados: una
+        afirmacion falsa que se cae en la primera entrevista.
+        """
+        texto = cls._normalize(question)
+        texto = texto.replace("años", "anos")
+        coincidencia = cls.PATRON_MINIMO.search(texto)
+        if not coincidencia:
+            return None
+        if coincidencia.group(2):
+            numero = coincidencia.group(2)
+            cantidad = float(cls.NUMEROS_EN_LETRAS.get(numero, numero) if not numero.isdigit() else numero)
+            estricto = coincidencia.group(1) in ("mas de", "mayor a", "superior a", "more than")
+            return cantidad, estricto
+        return float(coincidencia.group(5)), False
+
+    @classmethod
+    def _cumple(cls, question: str, anios: float) -> bool:
+        """Si los anos registrados alcanzan lo que pide la pregunta."""
+        exigido = cls._anios_exigidos(question)
+        if exigido is None:
+            return anios > 0
+        minimo, estricto = exigido
+        return anios > minimo if estricto else anios >= minimo
 
     # Verbos con los que la oferta pide que se explaye, no que cuantifique.
     PIDEN_RELATO = ("cuentanos", "cuentenos", "describe", "descripcion", "brevemente",
@@ -303,8 +449,9 @@ class CandidateQuestionAnswerer:
                     return level_match
                 return self._skip(f"No hay opcion de nivel compatible para {keyword}")
 
-            preferred = ("si", "tengo", "cuento") if value > 0 else ("no", "no tengo", "sin experiencia")
-            avoided = ("no", "no tengo", "sin experiencia") if value > 0 else ("si", "tengo", "cuento")
+            cumple = self._cumple(question, value)
+            preferred = ("si", "tengo", "cuento") if cumple else ("no", "no tengo", "sin experiencia")
+            avoided = ("no", "no tengo", "sin experiencia") if cumple else ("si", "tengo", "cuento")
             for option, normalized_option in zip(options, normalized_options):
                 if any(word in normalized_option for word in preferred) and not any(word in normalized_option for word in avoided):
                     return AnswerDecision(option, 0.9, f"Opcion por experiencia registrada en {keyword}: {value}", True)
@@ -315,7 +462,7 @@ class CandidateQuestionAnswerer:
             if por_alcance:
                 return AnswerDecision(por_alcance[0], 0.88, por_alcance[1], True)
 
-            return AnswerDecision("Si" if value > 0 else "No", 0.9, f"Experiencia registrada en {keyword}: {value}", True)
+            return AnswerDecision("Si" if cumple else "No", 0.9, f"Experiencia registrada en {keyword}: {value}", True)
 
         return self._skip("No hay skill opcion mapeada")
 
@@ -396,6 +543,12 @@ class CandidateQuestionAnswerer:
                 return answer
         return AnswerDecision("No especificado", 0.45, "Pregunta sensible sin dato exacto en perfil", True)
 
+    @classmethod
+    def _pide_tiempo_de_experiencia(cls, question: str) -> bool:
+        return cls._has_any(question, ("cuanto tiempo", "cuantos anos", "cuantos años",
+                                       "anos de experiencia", "años de experiencia",
+                                       "how many years", "years of experience"))
+
     def _answer_option_fallback(
         self,
         question: str,
@@ -419,6 +572,11 @@ class CandidateQuestionAnswerer:
         if elegida:
             valor, motivo = elegida
             return AnswerDecision(valor, 0.88, motivo, True)
+
+        # Piden cuantos anos en algo que el perfil no registra: cualquier opcion
+        # ("1 ano", "Mas de 2") seria inventada. Mejor sin responder que mentir.
+        if self._pide_tiempo_de_experiencia(question) and anios_de(question, self.profile) is None:
+            return self._skip("Piden anos en una tecnologia que el perfil no registra")
 
         preferences.extend(["no aplica", "ninguna", "ninguno", "no"])
         answer = self._match_option(options, normalized_options, preferences, "Fallback de seleccion multiple")

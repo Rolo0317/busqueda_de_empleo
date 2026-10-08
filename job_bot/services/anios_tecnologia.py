@@ -52,7 +52,67 @@ ALIAS: dict[str, str] = {
     "microservicios": "microservices",
     "liderazgo": "leadership",
     "liderando": "leadership",
+    # Areas y oficios, no solo herramientas. Sin estas, "minimo 3 anos en
+    # analisis de datos" se contestaba "No" teniendo seis (3 de octubre).
+    "analisis de datos": "data_analysis",
+    "analitica de datos": "data_analysis",
+    "analista de datos": "data_analysis",
+    "data analysis": "data_analysis",
+    "data analyst": "data_analysis",
+    "analisis de informacion": "data_analysis",
+    # "experiencia en el cargo" es el de la oferta, y el filtro de relevancia
+    # ya garantiza que es del perfil: cuentan los anos totales. Se contestaba
+    # "No" a "1 a 2 anos en el cargo" de Analista de datos con seis (3 de octubre).
+    "en el cargo": "total",
+    "en el rol": "total",
+    "cargos similares": "total",
+    "cargos afines": "total",
+    "roles similares": "total",
+    "inteligencia de negocios": "data_analysis",
+    "business intelligence": "data_analysis",
+    "gestion de informacion": "data_analysis",
+    "gestion de la informacion": "data_analysis",
+    "base de datos": "sql",
+    "bases de datos": "sql",
+    "call center": "call_center",
+    "contact center": "call_center",
+    "servicio al cliente": "customer_service",
+    "atencion al cliente": "customer_service",
+    "customer service": "customer_service",
+    "backoffice": "backoffice",
+    "back office": "backoffice",
+    "crm": "crm",
+    "gtr": "gtr",
+    "workforce": "gtr",
+    "torre de control": "gtr",
+    # "¿Tiene experiencia realizando dashboard?" se contesto "No" con cuatro
+    # anos de tableros en Power BI (3 de octubre).
+    "dashboard": "power_bi",
+    "dashboards": "power_bi",
+    "tablero": "power_bi",
+    "tableros": "power_bi",
+    "visualizacion de datos": "power_bi",
+    "reporteria": "data_analysis",
+    "kpi": "data_analysis",
+    "kpis": "data_analysis",
+    "indicadores": "data_analysis",
+    "ecommerce": "ecommerce",
+    "e-commerce": "ecommerce",
+    "marketing digital": "marketing_digital",
 }
+
+
+# Un alias que, si aparece, anula otros mas genericos de la misma frase:
+# "bases de datos NoSQL" habla de NoSQL, no de los anos de SQL relacional.
+ANULA: dict[str, tuple[str, ...]] = {
+    "nosql": ("base de datos", "bases de datos", "sql"),
+}
+
+# Variantes de SQL que el perfil no registra. Si la pregunta las nombra, los
+# anos de SQL generico no responden por ellas: "avanzado en Oracle PL/SQL, SQL"
+# casi se contesto "Mas de 2 anos" sin haber usado nunca Oracle (3 de octubre).
+SQL_AJENO = ("oracle", "pl/sql", "plsql", "pl sql", "t-sql", "tsql")
+SQL_GENERICO = ("sql", "base de datos", "bases de datos")
 
 
 def plano(texto: str) -> str:
@@ -74,7 +134,11 @@ def tecnologias_mencionadas(texto: str, perfil: dict[str, Any]) -> list[tuple[st
         valor = anios.get(clave)
         if isinstance(valor, (int, float)) and _menciona(alias, normalizado):
             encontradas.append((alias, float(valor)))
-    return encontradas
+
+    anulados = {otro for alias, _ in encontradas for otro in ANULA.get(alias, ())}
+    if any(_menciona(ajeno, normalizado) for ajeno in SQL_AJENO):
+        anulados.update(SQL_GENERICO)
+    return [(alias, anios) for alias, anios in encontradas if alias not in anulados]
 
 
 def anios_de(texto: str, perfil: dict[str, Any]) -> tuple[str, float] | None:

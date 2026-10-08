@@ -103,7 +103,9 @@ class RespuestasLocales:
 
     @staticmethod
     def _es_contacto(t: str) -> bool:
-        return any(m in t for m in ("whatsapp", "wpp", "wasap", "numero de celular",
+        # Con las faltas de ortografia reales de los formularios ("Whastapp").
+        return any(m in t for m in ("whatsapp", "whastapp", "whatsap", "watsap", "wpp", "wasap",
+                                    "numero de celular",
                                     "numero celular", "tu celular", "tu telefono",
                                     "numero de contacto", "numero de telefono",
                                     "numero movil", "linea de contacto"))

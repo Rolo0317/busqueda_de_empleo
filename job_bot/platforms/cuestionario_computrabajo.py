@@ -58,6 +58,16 @@ JS_CERRADAS = r"""
 """
 
 
+JS_MARCAR = r"""
+r => {
+  r.checked = true;
+  for (const tipo of ['click', 'input', 'change']) {
+    r.dispatchEvent(new Event(tipo, {bubbles: true}));
+  }
+}
+"""
+
+
 def _plano(texto: str) -> str:
     base = unicodedata.normalize("NFKD", texto or "").encode("ascii", "ignore").decode("ascii")
     return " ".join(base.lower().split())
@@ -126,8 +136,15 @@ class CuestionarioComputrabajo:
             radio.check(force=True)
             radio.dispatch_event("change")
         except Exception as error:
-            logging.warning("  no se pudo marcar %r: %s", elegida, str(error)[:70])
-            return False
+            # "Element is outside of the viewport": el radio oculto no siempre se
+            # deja pulsar. Se marca en la pagina con los eventos que el
+            # formulario escucha. Dos postulaciones quedaron sin enviar por esto.
+            logging.info("  marcando %r desde la pagina (%s)", elegida, str(error)[:50])
+            try:
+                radio.evaluate(JS_MARCAR)
+            except Exception as error_js:
+                logging.warning("  no se pudo marcar %r: %s", elegida, str(error_js)[:70])
+                return False
         return radio.is_checked()
 
     def sin_responder(self) -> list[Pregunta]:

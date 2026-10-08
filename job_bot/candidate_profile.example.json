@@ -14,6 +14,7 @@
     "onsite": true,
     "relocation": false,
     "travel": false,
+    "fixed_term_contract": true,
     "start_immediately": true
   },
   "languages": {

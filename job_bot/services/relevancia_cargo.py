@@ -17,6 +17,7 @@ class Encaje(str, Enum):
     ADYACENTE = "adyacente"      # usa su experiencia, sin ser el objetivo
     RETROCESO = "retroceso"      # por debajo del perfil actual
     STACK_AJENO = "stack_ajeno"  # pide una tecnologia que el perfil no tiene
+    RESERVADA = "reservada"      # cupo reservado a una poblacion que no es la del candidato
     DESCONOCIDO = "desconocido"
 
 
@@ -96,6 +97,13 @@ def sin_tildes(valor: str) -> str:
     return plano.encode("ascii", "ignore").decode("ascii").lower()
 
 
+# Vacantes de inclusion: el cupo es para personas con discapacidad. Postular
+# sin estarlo quita el puesto a quien si y vuelve como descarte automatico.
+MARCAS_INCLUSION_DISCAPACIDAD = (
+    "discapacidad", "vacante de inclusion", "vacante incluyente", "persona con discapacidad",
+)
+
+
 # Listas por defecto, con el nombre que las reemplaza en la clave "cargos" del
 # perfil. Otro candidato busca otros cargos: las define en su perfil sin tocar
 # el codigo, y las que no defina conservan el valor por defecto.
@@ -113,7 +121,9 @@ LISTAS_POR_DEFECTO = {
 class RelevanciaDelCargo:
     """Valora el encaje de un cargo con el perfil objetivo."""
 
-    def __init__(self, cargos: dict[str, list[str]] | None = None) -> None:
+    def __init__(self, cargos: dict[str, list[str]] | None = None,
+                 acepta_vacantes_de_inclusion: bool = False) -> None:
+        self.acepta_vacantes_de_inclusion = acepta_vacantes_de_inclusion
         # Las claves con "_" son notas para quien edita el perfil, no listas.
         propias = {k: v for k, v in (cargos or {}).items() if not k.startswith("_")}
         desconocidas = set(propias) - set(LISTAS_POR_DEFECTO)
@@ -126,6 +136,11 @@ class RelevanciaDelCargo:
 
     def valorar(self, texto: str) -> Valoracion:
         normalizado = sin_tildes(texto)
+
+        if not self.acepta_vacantes_de_inclusion:
+            reservada = self._coincidencia(MARCAS_INCLUSION_DISCAPACIDAD, normalizado)
+            if reservada:
+                return Valoracion(Encaje.RESERVADA, f"Cupo reservado: {reservada}")
 
         ajeno = self._buscar("fuera_del_perfil", normalizado)
         if ajeno:

@@ -365,9 +365,17 @@ class MagnetoPlatform(BasePlatform):
                 ya_contestadas.add(pregunta.texto)
                 logging.info("  %s. respondida | %s -> %s", indice, pregunta.texto[:60], valor[:60])
                 self._registrar(pregunta.texto, valor, decision.confidence)
+                self._pausa_de_revision()
             else:
                 logging.warning("  %s. sin poder responder | %s", indice, pregunta.texto[:90])
         return puestas
+
+    def _pausa_de_revision(self) -> None:
+        """Deja la respuesta en pantalla unos segundos para auditarla en vivo."""
+        segundos = self.settings.question_review_seconds
+        if segundos:
+            logging.info("  pausa de revision: %ss", segundos)
+            sleep(segundos)
 
     def _decidir(self, pregunta: Pregunta):
         """Elige la respuesta, prefiriendo la redactada del perfil en texto libre."""
