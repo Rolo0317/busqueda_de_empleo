@@ -2,16 +2,28 @@
 
 Tres piezas que comparten un solo perfil (`job_bot/candidate_profile.json`):
 
-- **CV web y PDF** — `cv_builder/` genera `dist/index.html` y `dist/cv_william_solano.pdf`. Vercel publica `dist/`.
-- **Bot de postulación** — `job_bot/` busca ofertas en Magneto y Computrabajo, contesta los cuestionarios desde el perfil y postula.
-- **Panel** — `backend/` (Django + DRF) y `frontend/` (React + Vite + TypeScript): vacantes, botón de ejecutar el bot y login.
+- **CV web y PDF** — `cv_builder/` genera `sitio/index.html` y los PDF en tu PC (necesita el perfil privado y Chromium). `sitio/` se versiona y Vercel lo publica en `/`.
+- **Bot de postulación** — `job_bot/` busca ofertas en Magneto y Computrabajo, contesta los cuestionarios desde el perfil y postula. Registra todo en Supabase.
+- **Panel** — `frontend/` (React + Vite + TypeScript) en Vercel, en `/panel`. Habla directo con Supabase: login con Supabase Auth y datos por las funciones `public.empleo_*`.
+- **Agente** — `job_bot/agente.py` corre en la PC, escucha las órdenes del botón y lanza el bot.
+
+## Datos en Supabase
+
+Proyecto **SurIA**, esquema propio **`empleo`** (no se mezcla con las tablas de SurIA). Las tablas tienen RLS sin políticas y el esquema no está expuesto: todo pasa por funciones `security definer` que exigen que el usuario esté en `empleo.operators`. La migración está en `supabase/migrations/`.
+
+```
+Panel (Vercel) --rpc--> public.empleo_solicitar_corrida --> empleo.bot_runs (pending)
+Agente (PC)    --rpc--> empleo_tomar_corrida -> lanza main.py -> empleo_reportar_corrida
+Bot (PC)       --rpc--> empleo_registrar_oferta / empleo_registrar_pregunta
+```
 
 ## Estructura
 
 ```
 abrir_navegador_bot.ps1   Abre el Edge del bot (puerto 9222, perfil job_bot/.edge-bot)
 ejecutar_bot.ps1          Lanza el bot sobre ese Edge
-ver_vacantes.ps1          Levanta el panel: backend en 8001, frontend en 5173
+iniciar_agente.ps1        Deja la PC escuchando el botón del panel (-AlIniciar: con Windows)
+ver_vacantes.ps1          Panel en local: http://localhost:5173/panel/
 reset_mysql.ps1           Restablece la clave de MySQL (como administrador)
 
 backend/                  accounts (login, cambio de clave), vacantes, botrunner (botón ejecutar)
@@ -45,10 +57,10 @@ No cierres la ventana de Edge del bot: el bot trabaja dentro de ella. El log de 
 
 1. **Busca** en cada plataforma con `MAGNETO_SEARCH_KEYWORDS`.
 2. **Analiza** cada oferta (`analyzer.py`): salario mínimo, ubicación, habilidades. Por debajo de `MIN_MATCH_SCORE` se descarta.
-3. **Postula** (`applicant.py`), saltando las ya registradas en MySQL y respetando `MAX_OFFERS`.
+3. **Postula** (`applicant.py`), saltando las ya registradas y respetando `MAX_OFFERS`.
    - *Magneto*: pulsa Aplicar, contesta el cuestionario y confirma. El veredicto final lo da su API (`jobs/v1/jobs/apply`): un 422 "ya ha sido aplicada" cuenta como postulada.
    - *Computrabajo*: navega a la URL de `data-href-offer-apply` (no pulsa, para no caer en "guardar"), contesta las preguntas de selección y confirma por la ruta `/candidate/postapply`.
-4. **Registra** oferta, estado y cada pregunta contestada en MySQL.
+4. **Registra** oferta, estado y cada pregunta contestada en Supabase (o MySQL con `DB_BACKEND=mysql`).
 
 Una postulación solo se marca `applied` si la plataforma la confirma.
 

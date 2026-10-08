@@ -1,6 +1,6 @@
 # Bot de búsqueda de empleo
 
-Busca ofertas en **Magneto** y **Computrabajo** (Colombia), descarta las que no encajan con tu perfil, contesta los cuestionarios de postulación con tus datos reales y se postula por ti. Guarda todo en MySQL para no repetir ofertas y para que veas qué se envió.
+Busca ofertas en **Magneto** y **Computrabajo** (Colombia), descarta las que no encajan con tu perfil, contesta los cuestionarios de postulación con tus datos reales y se postula por ti. Guarda todo en Supabase para no repetir ofertas y para que veas en el panel web qué se envió.
 
 Funciona sobre **tu propio navegador Edge**, con tu sesión iniciada: no guarda tus contraseñas de Magneto ni de Computrabajo.
 
@@ -11,7 +11,7 @@ Funciona sobre **tu propio navegador Edge**, con tu sesión iniciada: no guarda 
 - Responde preguntas abiertas, de opción múltiple, desplegables y de "sí/no" a partir de tu perfil. Si no tienes una tecnología, lo dice; nunca inventa experiencia.
 - Confirma que la postulación realmente quedó enviada antes de darla por hecha.
 - Opcional: usa Gemini o Groq (gratis) para preguntas abiertas que el perfil no cubre.
-- Opcional: un panel web (Django + React) para ver las vacantes y lanzar el bot.
+- Un panel web en Vercel con cifras, gráfica de actividad, vacantes y un botón para lanzar el bot.
 
 ## Antes de usarlo
 
@@ -56,7 +56,9 @@ mysql -u root -p < job_bot\database\schema.sql
 
 | Variable | Para qué sirve |
 |---|---|
-| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexión a MySQL |
+| `DB_BACKEND` | `supabase` (el panel web lo lee) o `mysql` (base local antigua) |
+| `SUPABASE_EMAIL`, `SUPABASE_PASSWORD` | Tu usuario del panel; el bot y el agente inician sesión con él |
+| `DB_USER`, `DB_PASSWORD`, `DB_NAME` | Conexión a MySQL, solo si `DB_BACKEND=mysql` |
 | `MAGNETO_SEARCH_KEYWORDS` | Palabras clave separadas por comas: `analista de datos,python,sql` |
 | `PLATFORMS` | `magneto`, `computrabajo` o ambas separadas por coma |
 | `CV_PATH` | Ruta completa al PDF de tu hoja de vida |
@@ -104,12 +106,20 @@ cd job_bot
 
 **Sí envía la postulación**, pero solo a esa oferta, mostrando cada pregunta y la respuesta que dio. Sirve para revisar cómo responde el bot después de editar tu perfil.
 
-### Panel web (opcional)
+### Panel web y botón de ejecutar
+
+El panel está publicado en Vercel, en `/panel` del mismo sitio que la hoja de vida. Entras con tu correo y la clave de `SUPABASE_PASSWORD`.
+
+El bot no corre en la nube: necesita tu Edge con las sesiones iniciadas. Por eso el botón **Ejecutar** deja una orden en Supabase y un **agente** en tu PC la toma:
 
 ```powershell
-cd frontend; npm install; cd ..
-.\ver_vacantes.ps1          # backend en :8001, panel en http://localhost:5173
+.\iniciar_agente.ps1             # deja la PC escuchando el panel
+.\iniciar_agente.ps1 -AlIniciar  # y además arranca solo con Windows
 ```
+
+El agente abre el navegador del bot si está cerrado, corre una sola pasada con el tope que elegiste y va subiendo el estado y el log al panel. Una orden que la PC no toma en 30 minutos caduca, para que un clic viejo no postule cuando prendas el equipo.
+
+Para probar cambios del panel en local: `.er_vacantes.ps1` (http://localhost:5173/panel/).
 
 ## Pruebas
 
@@ -125,7 +135,8 @@ No usan tu cuenta, tu navegador ni tu base de datos: corren contra el perfil de 
 instalar.ps1              Instalación en un equipo nuevo
 abrir_navegador_bot.ps1   Abre el Edge del bot (puerto 9222)
 ejecutar_bot.ps1          Lanza el bot
-ver_vacantes.ps1          Panel web
+iniciar_agente.ps1        Deja la PC escuchando el botón del panel web
+ver_vacantes.ps1          Panel web en local
 reset_mysql.ps1           Restablece la clave de root de MySQL (como administrador)
 
 job_bot/
@@ -134,11 +145,15 @@ job_bot/
   candidate_profile.example.json  Plantilla del perfil
   browser/navegador.py            Playwright conectado a tu Edge
   platforms/                      Magneto, Computrabajo y sus cuestionarios
-  services/                       Filtros, respuestas, registro en MySQL
-  database/schema.sql             Esquema de la base de datos
+  agente.py                       Toma las órdenes del panel y lanza el bot
+  services/                       Filtros, respuestas, registro (Supabase o MySQL)
+  database/schema.sql             Esquema MySQL antiguo
   tests/                          Pruebas
-backend/, frontend/       Panel web (Django + React)
-cv_builder/               Genera tu hoja de vida en HTML y PDF desde el perfil
+frontend/                 Panel web (React + Vite), publicado en Vercel en /panel
+supabase/migrations/      Esquema `empleo` y sus funciones (proyecto SurIA)
+cv_builder/               Genera tu hoja de vida en HTML y PDF desde el perfil -> sitio/
+sitio/                    Hoja de vida generada; Vercel la publica tal cual en /
+backend/                  Panel Django antiguo sobre MySQL (ya no lo usa el panel web)
 ```
 
 Detalles de arquitectura en [DOCS.md](DOCS.md).
@@ -154,5 +169,6 @@ Nunca subas al repositorio tu `.env`, tu `candidate_profile.json`, la carpeta `j
 | "No hay navegador escuchando en el puerto 9222" | Corre primero `.\abrir_navegador_bot.ps1` |
 | "No existe el perfil del candidato" | Copia `candidate_profile.example.json` como `candidate_profile.json` |
 | Una plataforma "queda fuera de esta corrida" | Se cerró la sesión: vuelve a iniciarla en el Edge del bot |
-| Error de conexión a MySQL | Revisa `DB_PASSWORD` en `.env`, o usa `reset_mysql.ps1` |
+| "No autorizado" o "No se pudo iniciar sesión en Supabase" | Revisa `SUPABASE_EMAIL` y `SUPABASE_PASSWORD` en `.env` |
+| El panel dice "PC desconectada" | Corre `.\iniciar_agente.ps1` y no cierres la ventana |
 | Se salta casi todas las ofertas | Revisa las listas `cargos` de tu perfil y baja `MIN_MATCH_SCORE` |

@@ -1,6 +1,24 @@
 {
-  "buildCommand": "cd cv_builder && npm install && npm run build",
-  "outputDirectory": "dist",
-  "installCommand": "echo skip",
-  "framework": null
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install --prefix frontend",
+  "buildCommand": "npm run build --prefix frontend && rm -rf publico && cp -r sitio publico && cp -r frontend/dist publico/panel",
+  "outputDirectory": "publico",
+  "rewrites": [
+    { "source": "/panel/:ruta((?!assets/).*)", "destination": "/panel/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "X-Frame-Options", "value": "DENY" }
+      ]
+    },
+    {
+      "source": "/panel/(.*)",
+      "headers": [{ "key": "X-Robots-Tag", "value": "noindex" }]
+    }
+  ]
 }

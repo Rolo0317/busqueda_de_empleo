@@ -16,27 +16,12 @@ from browser.navegador import Navegador
 from config import load_settings
 from models.job_offer import JobOffer
 from platforms.magneto import MagnetoPlatform
-from services.tracker import MySqlApplicationTracker
+from services.tracker import crear_tracker
 
 
 def mejor_pendiente(tracker, settings) -> JobOffer | None:
-    with tracker._connect() as conexion:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute(
-            """SELECT title, company_name, url, salary, location FROM jobs
-               WHERE platform = 'Magneto' AND status = 'found' AND match_score >= %s
-               ORDER BY match_score DESC LIMIT 1""",
-            (settings.min_match_score,),
-        )
-        fila = cursor.fetchone()
-
-    if not fila:
-        return None
-    return JobOffer(
-        platform="Magneto", title=fila["title"], company=fila["company_name"] or "No especificada",
-        url=fila["url"], salary=fila["salary"] or "No especificado",
-        city=fila["location"] or "No especificada",
-    )
+    pendientes = tracker.ofertas_pendientes("Magneto", settings.min_match_score, 1)
+    return pendientes[0] if pendientes else None
 
 
 def desde_url(url: str) -> JobOffer:
@@ -47,7 +32,7 @@ def desde_url(url: str) -> JobOffer:
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s", datefmt="%H:%M:%S")
     settings = load_settings()
-    tracker = MySqlApplicationTracker(settings)
+    tracker = crear_tracker(settings)
 
     oferta = desde_url(sys.argv[1]) if len(sys.argv) > 1 else mejor_pendiente(tracker, settings)
     if oferta is None:

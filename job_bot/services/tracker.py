@@ -1,11 +1,17 @@
-from typing import Any, Protocol
+"""Registro de vacantes, postulaciones y preguntas.
 
-import mysql.connector
-from mysql.connector import MySQLConnection
+Dos almacenes con la misma interfaz: Supabase (el que lee el panel web) y la
+base MySQL local de antes. `crear_tracker` elige segun DB_BACKEND; el resto del
+bot solo conoce el protocolo ApplicationTracker.
+"""
+from typing import TYPE_CHECKING, Any, Protocol
 
 from config import Settings
 from models.job_offer import JobOffer
 from services.analyzer import OfferAnalysis
+
+if TYPE_CHECKING:
+    from mysql.connector import MySQLConnection
 
 
 class ApplicationTracker(Protocol):
@@ -18,8 +24,22 @@ class ApplicationTracker(Protocol):
     def record(self, offer: JobOffer, status: str, notes: str = "", analysis: OfferAnalysis | None = None) -> None:
         ...
 
+    def record_question(self, question: str, answer: str, confidence: float, job_id: int | None = None) -> None:
+        ...
 
-class MySqlApplicationTracker:
+    def get_question_patterns(self) -> dict[str, dict]:
+        ...
+
+    def ensure_questions_table(self) -> None:
+        ...
+
+    def ofertas_pendientes(self, plataforma: str, min_score: int, limite: int) -> list[JobOffer]:
+        ...
+
+
+class ReglasDeRegistro:
+    """Lo que no depende del almacen: estados, recomendaciones y notas."""
+
     STATUS_MAP = {
         "aplicado": "applied",
         "encontrado": "found",
@@ -42,7 +62,48 @@ class MySqlApplicationTracker:
     # se reabria en cada ciclo, 236 veces en tres dias.
     RETRY_JOB_STATUSES = {"no_available", "error"}
     RETRY_AFTER_HOURS = 24
+    MODALIDAD_DESCONOCIDA = "No especificada"
 
+    def _to_db_status(self, status: str) -> str:
+        normalized = status.strip().lower()
+        return self.STATUS_MAP.get(normalized, "error")
+
+    @staticmethod
+    def _recommendation(status: str) -> str:
+        if status == "discarded":
+            return "Descartar por baja coincidencia"
+        if status == "applied":
+            return "Postulacion enviada"
+        if status == "no_available":
+            return "No disponible para aplicar"
+        return "Revisar error"
+
+    @staticmethod
+    def _append_notes(description: str, notes: str) -> str:
+        if not notes:
+            return description
+        if not description:
+            return f"Notas: {notes}"
+        return f"{description}\n\nNotas: {notes}"
+
+    @staticmethod
+    def _oferta_desde_fila(fila: dict[str, Any], plataforma: str) -> JobOffer:
+        return JobOffer(
+            platform=plataforma, title=fila["title"], url=fila["url"],
+            company=fila.get("company_name") or "No especificada",
+            salary=fila.get("salary") or "No especificado",
+            city=fila.get("location") or "No especificada",
+        )
+
+
+def crear_tracker(settings: Settings) -> ApplicationTracker:
+    if settings.db_backend.strip().lower() == "supabase":
+        from services.tracker_supabase import SupabaseApplicationTracker
+        return SupabaseApplicationTracker(settings)
+    return MySqlApplicationTracker(settings)
+
+
+class MySqlApplicationTracker(ReglasDeRegistro):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 
@@ -96,7 +157,24 @@ class MySqlApplicationTracker:
             cursor.close()
             connection.close()
 
-    def _connect(self) -> MySQLConnection:
+    def ofertas_pendientes(self, plataforma: str, min_score: int, limite: int) -> list[JobOffer]:
+        connection = self._connect()
+        try:
+            cursor = connection.cursor(dictionary=True)
+            cursor.execute(
+                """SELECT title, company_name, url, salary, location FROM jobs
+                   WHERE platform = %s AND status = 'found' AND match_score >= %s
+                   ORDER BY match_score DESC LIMIT %s""",
+                (plataforma, min_score, limite),
+            )
+            return [self._oferta_desde_fila(fila, plataforma) for fila in cursor.fetchall()]
+        finally:
+            cursor.close()
+            connection.close()
+
+    def _connect(self) -> "MySQLConnection":
+        import mysql.connector
+
         return mysql.connector.connect(
             host=self.settings.db_host,
             port=self.settings.db_port,
@@ -160,7 +238,7 @@ class MySqlApplicationTracker:
                 offer.company,
                 offer.salary,
                 offer.city,
-                "No especificada",
+                self.MODALIDAD_DESCONOCIDA,
                 offer.published_at,
                 str(offer.url),
                 description,
@@ -199,20 +277,6 @@ class MySqlApplicationTracker:
             (job_id, status, response),
         )
 
-    def _to_db_status(self, status: str) -> str:
-        normalized = status.strip().lower()
-        return self.STATUS_MAP.get(normalized, "error")
-
-    @staticmethod
-    def _recommendation(status: str) -> str:
-        if status == "discarded":
-            return "Descartar por baja coincidencia"
-        if status == "applied":
-            return "Postulacion enviada"
-        if status == "no_available":
-            return "No disponible para aplicar"
-        return "Revisar error"
-
     def record_question(self, question: str, answer: str, confidence: float, job_id: int | None = None) -> None:
         """Guardar pregunta respondida en la BD para análisis posterior."""
         connection = self._connect()
@@ -240,7 +304,7 @@ class MySqlApplicationTracker:
             cursor = connection.cursor()
             cursor.execute(
                 """
-                SELECT 
+                SELECT
                     SUBSTRING_INDEX(question_text, '?', 1) AS pattern,
                     COUNT(*) as count,
                     AVG(confidence_score) as avg_confidence
@@ -286,11 +350,3 @@ class MySqlApplicationTracker:
         finally:
             cursor.close()
             connection.close()
-
-    @staticmethod
-    def _append_notes(description: str, notes: str) -> str:
-        if not notes:
-            return description
-        if not description:
-            return f"Notas: {notes}"
-        return f"{description}\n\nNotas: {notes}"

@@ -107,6 +107,71 @@ label{display:block;font-size:13px;font-weight:600;color:var(--plata)}
 .confirmar p{font-size:14px}
 .acciones{display:flex;gap:10px;flex-wrap:wrap}
 
+/* --- Agente de la PC --- */
+
+.agente{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:14px;font-weight:600}
+.agente .punto{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.agente.encendido .punto{background:var(--bronce);box-shadow:0 0 0 3px rgba(140,90,43,.18)}
+.agente.apagado{color:var(--plata)}
+.agente.apagado .punto{background:transparent;border:2px solid var(--plata)}
+.agente .apoyo{font-weight:400}
+
+/* --- Corrida en curso --- */
+
+.corrida{border-top:1px solid var(--filete);padding-top:14px;display:flex;flex-direction:column;gap:10px}
+.log{
+  font-family:Consolas,"Cascadia Mono",ui-monospace,monospace;font-size:12px;line-height:1.5;
+  background:var(--tinta);color:#D9DDE2;border-radius:2px;
+  padding:12px 14px;max-height:240px;overflow:auto;white-space:pre-wrap;word-break:break-word;
+}
+.log:focus-visible{outline:2px solid var(--oro);outline-offset:2px}
+
+.historial summary,.tabla-datos summary{
+  cursor:pointer;font-size:13px;font-weight:600;color:var(--plata);min-height:32px;
+  display:flex;align-items:center;
+}
+.historial ul{list-style:none;margin-top:6px}
+.historial li{
+  display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  font-size:13px;padding:8px 0;border-top:1px solid var(--filete);color:var(--plata);
+}
+
+/* --- Resumen y grafica --- */
+
+.cifras dd.destacada{color:var(--bronce)}
+.subtitulo{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:6px}
+.subtitulo h3{font-size:14px;font-weight:700}
+
+.grafica{display:flex;flex-direction:column;gap:8px}
+.leyenda{display:flex;gap:18px;font-size:12.5px;color:var(--plata);font-weight:600}
+.leyenda > span,.tooltip > span{display:inline-flex;align-items:center;gap:6px}
+.muestra{width:10px;height:10px;border-radius:2px;display:inline-block;flex-shrink:0}
+
+.lienzo{position:relative}
+.lienzo svg{display:block;overflow:visible}
+.rejilla{stroke:#EDEFF2;stroke-width:1}
+.base{stroke:var(--filete);stroke-width:1}
+.eje{font-size:11px;fill:var(--plata)}
+
+.tooltip{
+  position:absolute;top:0;transform:translateX(-50%);pointer-events:none;
+  background:#fff;border:1px solid var(--filete);border-radius:2px;
+  box-shadow:0 4px 14px rgba(20,24,31,.10);
+  padding:8px 10px;display:flex;flex-direction:column;gap:3px;
+  font-size:12.5px;white-space:nowrap;
+}
+.grafica-cargando{height:180px;background:#F5F6F8;border-radius:2px;animation:latido 1.4s ease-in-out infinite}
+
+.tabla-datos table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+.tabla-datos th,.tabla-datos td{padding:6px 8px;border-top:1px solid var(--filete);text-align:right}
+.tabla-datos th:first-child{text-align:left;font-weight:600}
+.tabla-datos thead th{color:var(--plata);font-size:12px;border-top:none}
+.tabla-datos tbody{display:block;max-height:240px;overflow:auto}
+.tabla-datos thead,.tabla-datos tbody tr{display:table;width:100%;table-layout:fixed}
+
+.enlace{color:var(--tinta);font-weight:600;text-decoration:none;border-bottom:1px solid var(--oro)}
+.enlace:hover{border-bottom-width:2px}
+
 /* --- Pantallas angostas --- */
 
 @media (max-width:520px){

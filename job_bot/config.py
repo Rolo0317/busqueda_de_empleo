@@ -19,6 +19,8 @@ class Settings(BaseSettings):
     max_offers: int = Field(default=0, alias="MAX_OFFERS")
     wait_seconds: int = Field(alias="WAIT_SECONDS")
     loop_interval_seconds: int = Field(default=300, alias="LOOP_INTERVAL_SECONDS")
+    # Pausa tras cada respuesta del cuestionario, para revisarla en vivo; 0 la desactiva.
+    question_review_seconds: int = Field(default=0, ge=0, alias="QUESTION_REVIEW_SECONDS")
     min_match_score: int = Field(default=70, alias="MIN_MATCH_SCORE")
     min_salary: int = Field(default=2_500_000, alias="MIN_SALARY")
     run_continuously: bool = Field(default=True, alias="RUN_CONTINUOUSLY")
@@ -29,6 +31,13 @@ class Settings(BaseSettings):
     db_user: str = Field(default="root", validation_alias=AliasChoices("DB_USER", "sql_user", "SQL_USER"))
     db_password: str = Field(default="", validation_alias=AliasChoices("DB_PASSWORD", "Sql_password", "SQL_PASSWORD"))
     db_name: str = Field(default="job_bot", alias="DB_NAME")
+    # Donde se guardan vacantes y postulaciones: "supabase" (lo que lee el panel
+    # web) o "mysql" (la base local de antes).
+    db_backend: str = Field(default="mysql", alias="DB_BACKEND")
+    supabase_url: str = Field(default="", alias="SUPABASE_URL")
+    supabase_publishable_key: str = Field(default="", alias="SUPABASE_PUBLISHABLE_KEY")
+    supabase_email: str = Field(default="", alias="SUPABASE_EMAIL")
+    supabase_password: str = Field(default="", alias="SUPABASE_PASSWORD")
     ats_ai_provider: str = Field(default="auto", alias="ATS_AI_PROVIDER")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")

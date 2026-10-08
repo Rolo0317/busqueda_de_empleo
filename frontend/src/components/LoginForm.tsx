@@ -1,11 +1,11 @@
 import { useState, type FormEvent } from 'react';
 
 interface Props {
-  onEntrar: (usuario: string, password: string) => Promise<void>;
+  onEntrar: (email: string, password: string) => Promise<void>;
 }
 
 export function LoginForm({ onEntrar }: Props) {
-  const [usuario, setUsuario] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
@@ -15,7 +15,7 @@ export function LoginForm({ onEntrar }: Props) {
     setError(null);
     setEnviando(true);
     try {
-      await onEntrar(usuario, password);
+      await onEntrar(email, password);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo iniciar sesión');
     } finally {
@@ -29,10 +29,11 @@ export function LoginForm({ onEntrar }: Props) {
       <p className="apoyo">Este panel dispara postulaciones reales. Requiere sesión.</p>
 
       <label>
-        Usuario
+        Correo
         <input
-          value={usuario}
-          onChange={(e) => setUsuario(e.target.value)}
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           autoComplete="username"
           required
         />

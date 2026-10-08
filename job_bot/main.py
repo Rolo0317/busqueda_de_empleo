@@ -17,7 +17,7 @@ from services.analyzer import OfferAnalyzer
 from services.applicant import ApplicationSummary, JobApplicant
 from services.relevancia_cargo import RelevanciaDelCargo
 from services.searcher import JobSearcher
-from services.tracker import MySqlApplicationTracker
+from services.tracker import ApplicationTracker, crear_tracker
 
 CICLOS_ENTRE_REVISIONES_DE_SESION = 5
 
@@ -47,7 +47,7 @@ def ciudad_base(perfil: dict) -> str:
 
 
 def run_cycle(settings: Settings, perfil: dict, platforms: dict,
-              tracker: MySqlApplicationTracker) -> ApplicationSummary:
+              tracker: ApplicationTracker) -> ApplicationSummary:
     applicant = JobApplicant(
         platforms=platforms,
         tracker=tracker,
@@ -57,7 +57,10 @@ def run_cycle(settings: Settings, perfil: dict, platforms: dict,
         supervised=settings.supervised_apply,
         exhaustive=settings.exhaustive_mode,
         max_applications=settings.max_offers,
-        relevancia=RelevanciaDelCargo(perfil.get("cargos")),
+        relevancia=RelevanciaDelCargo(
+            perfil.get("cargos"),
+            acepta_vacantes_de_inclusion=bool(perfil.get("safe_booleans", {}).get("has_disability")),
+        ),
         ciudad_base=ciudad_base(perfil),
     )
     ofertas = JobSearcher(platforms=platforms).search_many(settings.search_keywords)
@@ -83,7 +86,7 @@ def log_summary(summary: ApplicationSummary) -> None:
     )
 
 
-def log_preguntas_aprendidas(tracker: MySqlApplicationTracker) -> None:
+def log_preguntas_aprendidas(tracker: ApplicationTracker) -> None:
     try:
         patrones = tracker.get_question_patterns()
     except Exception as error:
@@ -127,7 +130,7 @@ def main() -> None:
     except PerfilNoEncontrado as error:
         logging.error("%s", error)
         return
-    tracker = MySqlApplicationTracker(settings)
+    tracker = crear_tracker(settings)
     ciclos = 0
 
     try:

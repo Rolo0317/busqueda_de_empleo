@@ -47,9 +47,9 @@ if ($fallidas -eq 0) { Write-Host "   Todas las pruebas pasan." -ForegroundColor
 
 Write-Host ""
 Write-Host "Siguientes pasos:" -ForegroundColor Green
-Write-Host "  1. Edita .env (base de datos, palabras clave, ruta de tu hoja de vida)."
+Write-Host "  1. Edita .env: SUPABASE_EMAIL y SUPABASE_PASSWORD, palabras clave y ruta de tu hoja de vida."
 Write-Host "  2. Edita job_bot\candidate_profile.json con TUS datos reales."
-Write-Host "  3. Crea la base de datos:  mysql -u root -p < job_bot\database\schema.sql"
+Write-Host "  3. Corre .\iniciar_agente.ps1 -AlIniciar para usar el boton del panel web."
 Write-Host "  4. Corre .\abrir_navegador_bot.ps1 e inicia sesion en Magneto y Computrabajo."
 Write-Host "  5. Corre .\ejecutar_bot.ps1"
 Write-Host ""

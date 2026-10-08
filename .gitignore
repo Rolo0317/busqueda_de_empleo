@@ -122,3 +122,6 @@ PRODUCT.md
 .codex/
 .impeccable/
 .mcp.json
+
+# Salida del build de Vercel (sitio + panel)
+publico/

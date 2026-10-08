@@ -1,45 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
-import { cerrarSesion, iniciarSesion, sesionActual, type Usuario } from '../api/auth';
+import type { Session } from '@supabase/supabase-js';
+import { alCambiarSesion, cerrarSesion, esOperador, iniciarSesion, sesionActual } from '../api/auth';
 
-type Estado = 'comprobando' | 'anonimo' | 'autenticado';
+type Estado = 'comprobando' | 'anonimo' | 'sin-permiso' | 'autenticado';
+
+async function estadoDe(sesion: Session | null): Promise<Estado> {
+  if (sesion === null) return 'anonimo';
+  try {
+    return (await esOperador()) ? 'autenticado' : 'sin-permiso';
+  } catch {
+    return 'sin-permiso';
+  }
+}
 
 export function useSession() {
   const [estado, setEstado] = useState<Estado>('comprobando');
-  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [correo, setCorreo] = useState<string | null>(null);
 
-  // Al cargar se pregunta si la cookie de sesion sigue viva, para no mostrar
-  // el login a alguien que ya entro.
+  const aplicar = useCallback(async (sesion: Session | null) => {
+    setCorreo(sesion?.user.email ?? null);
+    setEstado(await estadoDe(sesion));
+  }, []);
+
+  // Supabase guarda la sesion en el navegador: quien ya entro no ve el login.
   useEffect(() => {
-    let vigente = true;
-    sesionActual()
-      .then((u) => {
-        if (!vigente) return;
-        setUsuario(u);
-        setEstado('autenticado');
-      })
-      .catch(() => {
-        if (vigente) setEstado('anonimo');
-      });
-    return () => {
-      vigente = false;
-    };
-  }, []);
+    void sesionActual().then(aplicar);
+    return alCambiarSesion((sesion) => {
+      // El callback de Supabase no debe esperar otras llamadas a Supabase.
+      setTimeout(() => void aplicar(sesion), 0);
+    });
+  }, [aplicar]);
 
-  const entrar = useCallback(async (nombre: string, password: string) => {
-    const u = await iniciarSesion(nombre, password);
-    setUsuario(u);
-    setEstado('autenticado');
-  }, []);
-
-  const marcarPasswordCambiada = useCallback(() => {
-    setUsuario((previo) => (previo === null ? null : { ...previo, debeCambiarPassword: false }));
+  const entrar = useCallback(async (email: string, password: string) => {
+    await iniciarSesion(email, password);
   }, []);
 
   const salir = useCallback(async () => {
     await cerrarSesion();
-    setUsuario(null);
-    setEstado('anonimo');
   }, []);
 
-  return { estado, usuario, entrar, salir, marcarPasswordCambiada };
+  return { estado, correo, entrar, salir };
 }

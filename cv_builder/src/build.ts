@@ -14,7 +14,9 @@ const RUTAS = {
   css: join(RAIZ, 'cv_builder', 'static', 'cv.css'),
   cssAts: join(RAIZ, 'cv_builder', 'static', 'cv_ats.css'),
   foto: join(RAIZ, 'foto_corporativa.jpeg'),
-  salida: join(RAIZ, 'dist'),
+  // Versionada a proposito: Vercel la publica tal cual, porque alla no estan
+  // el perfil privado ni el Chromium que generan el PDF.
+  salida: join(RAIZ, 'sitio'),
 } as const;
 
 /** El limite no es estetico: un CV de 3 paginas se descarta antes de leerse. */

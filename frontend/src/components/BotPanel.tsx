@@ -1,98 +1,212 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ejecutarBot, estadoBot, type EstadoBot } from '../api/bot';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  cancelarCorrida,
+  corridaViva,
+  estadoAgente,
+  listarCorridas,
+  solicitarCorrida,
+  type Corrida,
+  type EstadoAgente,
+  type EstadoCorrida,
+} from '../api/bot';
+import { useSondeo } from '../hooks/useSondeo';
+import { formatearFechaHora, haceCuanto } from '../lib/formato';
 
-const MAX_OFERTAS = 20;
-const INTERVALO_SONDEO_MS = 5000;
+const TOPES = [5, 10, 20] as const;
+const SONDEO_EN_CURSO_MS = 3000;
+const SONDEO_EN_REPOSO_MS = 15000;
+const LINEAS_VISIBLES_DEL_LOG = 14;
 
-export function BotPanel() {
-  const [estado, setEstado] = useState<EstadoBot | null>(null);
-  const [error, setError] = useState<string | null>(null);
+const ETIQUETA_ESTADO: Record<EstadoCorrida, string> = {
+  pending: 'En cola: esperando a la PC',
+  running: 'Corriendo',
+  finished: 'Terminó',
+  failed: 'Falló',
+  cancelled: 'Cancelada',
+  expired: 'Caducó sin ejecutarse',
+};
+
+interface Props {
+  onCorridaTerminada: () => void;
+}
+
+function Agente({ agente }: { agente: EstadoAgente | null }) {
+  if (agente === null) return <p className="apoyo">Consultando la PC…</p>;
+  if (!agente.enLinea) {
+    return (
+      <p className="agente apagado">
+        <span className="punto" aria-hidden="true" />
+        PC desconectada
+        {agente.ultimoLatido && <span className="apoyo"> · última señal {haceCuanto(agente.ultimoLatido)}</span>}
+      </p>
+    );
+  }
+  return (
+    <p className="agente encendido">
+      <span className="punto" aria-hidden="true" />
+      PC lista ({agente.maquina})
+      <span className="apoyo">
+        {' · '}navegador {agente.navegadorListo ? 'abierto' : 'cerrado (se abrirá solo)'}
+      </span>
+    </p>
+  );
+}
+
+function DetalleCorrida({ corrida, onCancelar }: { corrida: Corrida; onCancelar: () => void }) {
+  const log = (corrida.log ?? '').split('\n').slice(-LINEAS_VISIBLES_DEL_LOG).join('\n');
+  return (
+    <div className="corrida">
+      <dl className="estado">
+        <div>
+          <dt>Corrida #{corrida.id}</dt>
+          <dd className={corridaViva(corrida) ? 'vivo' : ''}>{ETIQUETA_ESTADO[corrida.estado]}</dd>
+        </div>
+        <div>
+          <dt>Tope</dt>
+          <dd>{corrida.maxOfertas}</dd>
+        </div>
+        {corrida.resumen && (
+          <>
+            <div><dt>Revisadas</dt><dd>{corrida.resumen.revisadas}</dd></div>
+            <div><dt>Postuladas</dt><dd className="vivo">{corrida.resumen.aplicadas}</dd></div>
+            <div><dt>Errores</dt><dd>{corrida.resumen.errores}</dd></div>
+          </>
+        )}
+      </dl>
+      <p className="apoyo">
+        Pedida {formatearFechaHora(corrida.solicitada)}
+        {corrida.terminada && ` · terminó ${formatearFechaHora(corrida.terminada)}`}
+      </p>
+      {log && (
+        <pre className="log" aria-label="Últimas líneas del registro del bot" tabIndex={0}>{log}</pre>
+      )}
+      {corrida.estado === 'pending' && (
+        <button type="button" className="secundario" onClick={onCancelar}>Cancelar solicitud</button>
+      )}
+    </div>
+  );
+}
+
+export function BotPanel({ onCorridaTerminada }: Props) {
+  const [tope, setTope] = useState<number>(TOPES[1]);
   const [confirmando, setConfirmando] = useState(false);
-  const [lanzando, setLanzando] = useState(false);
+  const [enviando, setEnviando] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const refrescar = useCallback(async () => {
-    try {
-      setEstado(await estadoBot());
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo consultar el estado');
-    }
-  }, []);
+  const cargarCorridas = useCallback(() => listarCorridas(), []);
+  const corridas = useSondeo(cargarCorridas, null);
+  const ultima = corridas.datos?.[0];
+  const viva = corridaViva(ultima);
+  const intervalo = viva ? SONDEO_EN_CURSO_MS : SONDEO_EN_REPOSO_MS;
+
+  const agente = useSondeo(estadoAgente, intervalo);
+  const { refrescar: refrescarCorridas } = corridas;
 
   useEffect(() => {
-    void refrescar();
-  }, [refrescar]);
-
-  // Solo se sondea mientras hay algo que mirar.
-  useEffect(() => {
-    if (estado?.corriendo !== true) return;
-    const id = setInterval(() => void refrescar(), INTERVALO_SONDEO_MS);
+    const id = setInterval(() => {
+      if (document.visibilityState === 'visible') void refrescarCorridas();
+    }, intervalo);
     return () => clearInterval(id);
-  }, [estado?.corriendo, refrescar]);
+  }, [intervalo, refrescarCorridas]);
+
+  // Cuando una corrida pasa de viva a terminada, las cifras del panel cambiaron.
+  const estabaViva = useRef(false);
+  useEffect(() => {
+    if (estabaViva.current && !viva) onCorridaTerminada();
+    estabaViva.current = viva;
+  }, [viva, onCorridaTerminada]);
 
   async function lanzar() {
     setError(null);
-    setLanzando(true);
+    setEnviando(true);
     try {
-      setEstado(await ejecutarBot(MAX_OFERTAS));
+      await solicitarCorrida(tope);
       setConfirmando(false);
+      await refrescarCorridas();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'No se pudo ejecutar');
+      setError(e instanceof Error ? e.message : 'No se pudo solicitar la corrida');
     } finally {
-      setLanzando(false);
+      setEnviando(false);
     }
   }
 
-  const corriendo = estado?.corriendo === true;
+  async function cancelar(id: number) {
+    try {
+      await cancelarCorrida(id);
+      await refrescarCorridas();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo cancelar');
+    }
+  }
+
+  const pcApagada = agente.datos !== null && !agente.datos.enLinea;
 
   return (
-    <section className="tarjeta">
-      <h2>Ejecutar bot</h2>
+    <section className="tarjeta" aria-labelledby="titulo-bot">
+      <h2 id="titulo-bot">Ejecutar bot</h2>
+
+      <Agente agente={agente.datos} />
 
       <p className="apoyo">
-        Postula hasta <strong>{MAX_OFERTAS} ofertas</strong> en una sola pasada y se detiene.
-        No queda corriendo en bucle.
+        Busca en Magneto y Computrabajo, postula hasta el tope que elijas y se detiene.
+        Corre en tu PC, con tu navegador y tus sesiones; este botón solo le da la orden.
+        {pcApagada && ' Prende la PC y deja corriendo iniciar_agente.ps1: la orden caduca en 30 minutos.'}
       </p>
 
-      <dl className="estado">
-        <div>
-          <dt>Estado</dt>
-          <dd className={corriendo ? 'vivo' : ''}>{corriendo ? 'Corriendo' : 'Detenido'}</dd>
-        </div>
-        {estado?.iniciado != null && (
-          <div>
-            <dt>Último inicio</dt>
-            <dd>{new Date(estado.iniciado).toLocaleString('es-CO')}</dd>
-          </div>
-        )}
-        {estado?.codigoSalida != null && (
-          <div>
-            <dt>Salida</dt>
-            <dd>{estado.codigoSalida === 0 ? 'Terminó bien' : `Código ${estado.codigoSalida}`}</dd>
-          </div>
-        )}
-      </dl>
+      <div className="chips" role="radiogroup" aria-label="Tope de postulaciones">
+        {TOPES.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={tope === t}
+            className={tope === t ? 'chip activo' : 'chip'}
+            onClick={() => setTope(t)}
+            disabled={viva}
+          >
+            Hasta {t}
+          </button>
+        ))}
+      </div>
 
-      {error !== null && <p className="error" role="alert">{error}</p>}
+      {(error ?? corridas.error) !== null && <p className="error" role="alert">{error ?? corridas.error}</p>}
 
       {/* Confirmacion explicita: una postulacion enviada no se puede retirar. */}
       {confirmando ? (
         <div className="confirmar">
           <p>
-            Vas a enviar postulaciones reales a tu nombre. <strong>No se pueden deshacer.</strong>
+            Vas a enviar hasta <strong>{tope} postulaciones reales</strong> a tu nombre.
+            No se pueden deshacer.
           </p>
           <div className="acciones">
-            <button onClick={() => void lanzar()} disabled={lanzando} className="peligro">
-              {lanzando ? 'Lanzando…' : `Sí, postular a ${MAX_OFERTAS}`}
+            <button type="button" onClick={() => void lanzar()} disabled={enviando} className="peligro">
+              {enviando ? 'Enviando orden…' : `Sí, postular hasta ${tope}`}
             </button>
-            <button onClick={() => setConfirmando(false)} className="secundario">
+            <button type="button" onClick={() => setConfirmando(false)} className="secundario">
               Cancelar
             </button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setConfirmando(true)} disabled={corriendo}>
-          {corriendo ? 'Ya está corriendo' : 'Ejecutar'}
+        <button type="button" onClick={() => setConfirmando(true)} disabled={viva}>
+          {viva ? 'Hay una corrida en curso' : 'Ejecutar'}
         </button>
+      )}
+
+      {ultima && <DetalleCorrida corrida={ultima} onCancelar={() => void cancelar(ultima.id)} />}
+
+      {corridas.datos && corridas.datos.length > 1 && (
+        <details className="historial">
+          <summary>Corridas anteriores</summary>
+          <ul>
+            {corridas.datos.slice(1).map((c) => (
+              <li key={c.id}>
+                <span>#{c.id} · {formatearFechaHora(c.solicitada)}</span>
+                <span>{ETIQUETA_ESTADO[c.estado]}{c.resumen ? ` · ${c.resumen.aplicadas} postuladas` : ''}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

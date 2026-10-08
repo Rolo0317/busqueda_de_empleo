@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CV - William Danilo Solano Álvarez</title>
+<meta name="description" content="Full Stack Developer &amp; Data Analyst — Bogotá, D.C., Colombia">
+<style>
+/* Arquitectura Medallon.
+   Regla de color, no negociable: el oro marca SOLO lo probado con cifra, el
+   bronce SOLO la credencial verificable, la plata la trayectoria. Ningun acento
+   se gasta en enfasis decorativo; el enfasis se hace con peso y escala. */
+
+:root{
+  --papel:#FAFAF7;
+  --tinta:#14181F;
+  --oro:#C8960C;          /* sobre tinta: 6.63:1 */
+  --plata:#59636F;        /* sobre papel: 5.84:1 */
+  --bronce:#8C5A2B;       /* sobre papel: 5.56:1 */
+  --filete:#C7CDD4;       /* solo lineas, nunca texto */
+  --filete-tinta:rgba(250,250,247,.30);
+  --margen:10mm;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+
+body{
+  font-family:"Segoe UI",system-ui,-apple-system,Arial,sans-serif;
+  background:var(--papel);
+  color:var(--tinta);
+  font-size:13px;
+  line-height:1.42;
+  font-variant-numeric:tabular-nums;
+}
+
+.page{max-width:190mm;margin:0 auto}
+
+/* ---------- ESTRATO ORO ---------- */
+/* Sangra a los bordes anulando el margen de pagina con inset negativo. */
+
+.estrato-oro{
+  position:relative;
+  background:var(--tinta);
+  color:var(--papel);
+  padding:16px 22px 13px;
+}
+
+.avatar-frame{position:absolute;top:16px;right:22px;width:72px;height:72px;border-radius:2px;overflow:hidden}
+.avatar-frame img{width:100%;height:100%;object-fit:cover;object-position:center top}
+
+/* El nombre ocupa el ancho del estrato: es la unica jugada de escala del documento. */
+.name-block{padding-right:88px}
+.name-block h1{
+  font-size:58px;line-height:.92;font-weight:700;
+  letter-spacing:-0.03em;text-transform:uppercase;color:var(--papel);
+}
+.name-block h1 span{display:block}
+.name-block p{
+  font-size:12px;letter-spacing:0.13em;text-transform:uppercase;
+  color:var(--papel);margin-top:8px;font-weight:600;
+}
+
+/* Las cifras son lo unico que lleva oro. */
+.logro-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:13px;margin:14px 0 12px}
+.logro-card strong{display:block;font-size:19px;font-weight:700;color:var(--oro);letter-spacing:-0.01em;margin-bottom:3px}
+.logro-card span{display:block;font-size:12px;line-height:1.3;color:var(--papel)}
+
+/* Contacto: accion primaria. Correo y telefono destacan por peso, no por color. */
+.contacto{display:flex;flex-wrap:wrap;align-items:center;gap:4px 13px;border-top:1px solid var(--filete-tinta);padding-top:10px}
+.contact-item{display:flex;align-items:center;gap:5px;color:var(--papel);font-size:12px}
+.contact-item.principal{font-size:13px;font-weight:700}
+.contact-item .ico{width:14px;height:14px;flex-shrink:0;stroke:currentColor;opacity:.75}
+
+/* ---------- CUERPO ---------- */
+
+.main{padding:14px 0 0}
+.section{margin-bottom:13px}
+.section:last-child{margin-bottom:0}
+
+h2{
+  font-size:12px;letter-spacing:0.16em;text-transform:uppercase;font-weight:700;
+  color:var(--plata);padding-bottom:4px;border-bottom:1px solid var(--filete);margin-bottom:9px;
+}
+
+.headline{margin-bottom:13px}
+.headline p{font-size:13px;line-height:1.45}
+.headline strong{font-weight:700}   /* enfasis por peso, sin gastar acento */
+
+/* ---------- ESTRATO PLATA ---------- */
+
+.job{margin-bottom:9px}
+.job:last-child{margin-bottom:0}
+.job-header{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:3px}
+.job-title{font-weight:700;font-size:13px}
+.job-company{font-size:12px;color:var(--plata);font-weight:600}
+.job-date{font-size:12px;color:var(--plata);white-space:nowrap;font-weight:600;letter-spacing:.03em}
+.job ul{list-style:none;margin-top:4px}
+.job ul li{font-size:12px;line-height:1.38;padding-left:11px;position:relative;margin-bottom:2px}
+.job ul li::before{content:"";position:absolute;left:0;top:7px;width:4px;height:1px;background:var(--plata)}
+
+/* ---------- ESTRATO BRONCE ---------- */
+/* Filas de ancho completo: un filete cruza la hoja entera, como el resto del mundo. */
+
+.credencial{display:grid;grid-template-columns:1fr auto;gap:0 16px;align-items:baseline;padding:4px 0;border-bottom:1px solid var(--filete)}
+.credencial:last-child{border-bottom:none}
+.edu-title{font-weight:600;font-size:12px;line-height:1.3}
+.edu-inst{font-size:12px;color:var(--bronce);line-height:1.3}
+.edu-inst em{font-style:normal;color:var(--plata)}
+.edu-year{font-size:12px;color:var(--plata);font-weight:600;white-space:nowrap;text-align:right}
+
+/* ---------- Stack, idiomas, competencias ---------- */
+/* Separadas por filetes, no por pildoras: el mundo separa con reglas. */
+
+.tech-grid{display:flex;flex-wrap:wrap;gap:3px 12px;font-size:12px}
+.tech-tag{position:relative;padding-right:12px}
+.tech-tag::after{content:"";position:absolute;right:0;top:3px;bottom:3px;width:1px;background:var(--filete)}
+.tech-tag:last-child::after{display:none}
+.tech-tag.destacada{font-weight:700}
+
+.idiomas{display:flex;gap:20px;font-size:12px;margin-top:8px}
+.competencias{font-size:12px;line-height:1.4;margin-top:4px;color:var(--plata)}
+
+/* ---------- Referencia ---------- */
+
+.ref-card{border-left:1px solid var(--filete);padding-left:12px}
+.ref-card strong{font-size:12px;display:block}
+.ref-card em{font-size:12px;color:var(--bronce);font-style:normal;display:block;margin-bottom:4px}
+.ref-card p{font-size:12px;line-height:1.38}
+
+/* ---------- Pantallas angostas ---------- */
+/* Solo pantalla: la ruta de impresion y las dos paginas quedan intactas. */
+
+@media screen and (max-width:640px){
+  .logro-grid{grid-template-columns:1fr 1fr;gap:11px}
+  .name-block{padding-right:0}
+  .name-block h1{font-size:34px}
+  .avatar-frame{position:static;margin-bottom:10px}
+  .job-header{flex-direction:column;gap:1px}
+  .credencial{grid-template-columns:1fr}
+  .edu-year{text-align:left}
+}
+
+/* ---------- Impresion ---------- */
+
+@page{margin:var(--margen);size:A4}
+
+@media print{
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+  body{background:var(--papel)}
+  .page{max-width:none}
+  /* Sangra a los bordes anulando el margen de pagina. */
+  .estrato-oro{margin:calc(-1 * var(--margen)) calc(-1 * var(--margen)) 0}
+  .section{break-inside:avoid}
+  .job{break-inside:avoid}
+  .credencial{break-inside:avoid}
+  h2{break-after:avoid}          /* el titulo nunca queda huerfano al pie */
+  .estrato-oro{break-after:avoid}
+}
+
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="estrato-oro">
+    <div class="avatar-frame">
+      <img src="foto_corporativa.jpeg" alt="William Danilo Solano Álvarez">
+    </div>
+    <div class="name-block">
+      <h1>William Danilo<span>Solano Álvarez</span></h1>
+      <p>Full Stack Developer &amp; Data Analyst</p>
+    </div>
+
+    <div class="logro-grid">
+        <div class="logro-card">
+          <strong>2 h → 0</strong>
+          <span>Proceso diario de carga de bases eliminado por completo con un agente RPA propio</span>
+        </div>
+        <div class="logro-card">
+          <strong>40 %</strong>
+          <span>Menos tiempo de reportería automatizando con Python en operaciones de alto volumen</span>
+        </div>
+        <div class="logro-card">
+          <strong>CRM estable</strong>
+          <span>Las consultas masivas de Power BI dejaron de tumbar las bases tras reestructurar con procedimientos almacenados y arquitectura Medallón</span>
+        </div>
+        <div class="logro-card">
+          <strong>4 campañas</strong>
+          <span>Una sola plataforma analítica sirviendo a Claro TYT, Claro Portabilidad, Dermatológico y RappiPay</span>
+        </div>
+    </div>
+
+    <div class="contacto">
+      <div class="contact-item principal">
+      <svg class="ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.95 12a19.79 19.79 0 01-3.07-8.67A2 2 0 012.85 1h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L7.09 8.64a16 16 0 006.29 6.29l1-.95a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z"/></svg>
+      +57 320 391 4473
+    </div>
+      <div class="contact-item principal">
+      <svg class="ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      daniloalvarez1719@gmail.com
+    </div>
+      <div class="contact-item">
+      <svg class="ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      Bogotá, D.C., Colombia
+    </div>
+      <div class="contact-item">
+      <svg class="ico" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 8a6 6 0 016 6v7h-4v-7a2 2 0 00-2-2 2 2 0 00-2 2v7h-4v-7a6 6 0 016-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+      linkedin.com/in/william-danilo-solano-alvarez
+    </div>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <div class="headline">
+      <p>Perfil híbrido de <strong>Desarrollo Full Stack y Análisis de Datos</strong> con 6 años de experiencia. He construido plataformas analíticas completas de punta a punta —backend, frontend, base de datos y el <strong>agente RPA</strong> que las alimenta—, automatizado con Python procesos que consumían horas diarias y diseñado arquitecturas de datos que sostienen la operación sin saturar los servidores. Uso de <strong>IA generativa</strong> aplicada para acelerar desarrollo y análisis.</p>
+    </div>
+
+    <section class="section">
+      <h2>Experiencia profesional</h2>
+      <div class="job">
+        <div class="job-header">
+          <div>
+            <div class="job-title">Analista de Datos / Full Stack</div>
+            <div class="job-company">QUE+ (Contact Center, BPO y Procesos Jurídicos)</div>
+          </div>
+          <span class="job-date">Jul 2026 - Sep 2026</span>
+        </div>
+        <ul>
+          <li>Desarrollo full stack desde cero de plataforma analítica con autenticación y control de roles para clientes y personal interno, sobre las campañas Claro TYT, Claro Portabilidad, Dermatológico y RappiPay.</li>
+          <li>Módulos de gestión de usuarios, metas en caché, interfaz en modo oscuro/claro y reportes multi-pestaña con Forecasting MTD, puntos de control, gestión diaria y consolidados mensuales.</li>
+          <li>Agente RPA para carga masiva de bases de datos, eliminando la intervención humana en un proceso diario que tardaba entre 50 minutos y 2 horas.</li>
+          <li>Reestructuración de consultas SQL con procedimientos almacenados y arquitectura Medallón, resolviendo la saturación del servidor causada por consultas masivas de Power BI.</li>
+          <li>Aplicación de IA generativa en los flujos de desarrollo y análisis para acelerar los tiempos de entrega.</li>
+        </ul>
+      </div>
+      <div class="job">
+        <div class="job-header">
+          <div>
+            <div class="job-title">Desarrollador Full Stack</div>
+            <div class="job-company">Arise Systems Firm S.A.S</div>
+          </div>
+          <span class="job-date">Abr 2026 - Jul 2026</span>
+        </div>
+        <ul>
+          <li>Desarrollo de sitios web y landing pages.</li>
+          <li>Implementación full stack con APIs REST.</li>
+          <li>Optimización de rendimiento y SEO técnico.</li>
+          <li>Desarrollo de tiendas ecommerce para pequeñas y medianas empresas.</li>
+          <li>Campañas de marketing digital con Meta para impulsar negocios locales.</li>
+          <li>Construcción de identidad web propia para clientes sin presencia digital.</li>
+          <li>Automatización de procesos manuales y repetitivos de clientes.</li>
+        </ul>
+      </div>
+      <div class="job">
+        <div class="job-header">
+          <div>
+            <div class="job-title">Data Analyst Jr - Torre de Control - Reporting</div>
+            <div class="job-company">GROUPCOS (Customer Operation Success SAS)</div>
+          </div>
+          <span class="job-date">Mar 2020 - Mar 2026</span>
+        </div>
+        <ul>
+          <li>Automatización con Python reduciendo 40% tiempos de proceso.</li>
+          <li>Dashboards en Power BI con KPIs operativos y financieros.</li>
+          <li>ETL desde MySQL y múltiples fuentes.</li>
+          <li>Análisis de tendencias y reportes ejecutivos estratégicos.</li>
+        </ul>
+      </div>
+      <div class="job">
+        <div class="job-header">
+          <div>
+            <div class="job-title">Auxiliar de Ventas y Call Center</div>
+            <div class="job-company">Éxito Américas</div>
+          </div>
+          <span class="job-date">Jun 2019 - Ene 2020</span>
+        </div>
+        <ul>
+          <li>Atención al cliente por teléfono y correo electrónico.</li>
+          <li>Procesamiento de pedidos y gestión de backoffice.</li>
+          <li>Manejo de bases de datos de clientes y CRM.</li>
+          <li>Coordinación de operaciones y seguimiento de gestión.</li>
+          <li>Resolución de consultas y soporte al cliente.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>Formación y certificaciones verificables</h2>
+      <div class="credencial">
+          <div>
+            <div class="edu-title">Técnico en Operaciones Comerciales</div>
+            <div class="edu-inst">SENA</div>
+          </div>
+          <span class="edu-year">2020</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Bachiller Académico</div>
+            <div class="edu-inst">Colegio José Francisco Socarrás IED</div>
+          </div>
+          <span class="edu-year">2018</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Encontrar y Evaluar Ideas para Emprender</div>
+            <div class="edu-inst">Platzi · 9 horas</div>
+          </div>
+          <span class="edu-year">Sep 2026</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Curso en Desarrollo Web Back-End con Python y Django/Flask</div>
+            <div class="edu-inst">Universidad de los Andes / Colsubsidio / TecAlianza · 60 horas</div>
+          </div>
+          <span class="edu-year">Jun 2026</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Curso en Desarrollo Web Front-End con HTML, CSS y JavaScript</div>
+            <div class="edu-inst">Universidad de los Andes / Colsubsidio / TecAlianza · 60 horas</div>
+          </div>
+          <span class="edu-year">Oct 2025</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Curso English - Basics II</div>
+            <div class="edu-inst">CET Colsubsidio · 65 horas</div>
+          </div>
+          <span class="edu-year">Mar 2023</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Curso English - Basics I</div>
+            <div class="edu-inst">CET Colsubsidio · 65 horas</div>
+          </div>
+          <span class="edu-year">Sep 2022</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Atender clientes de acuerdo con procedimiento de servicio y normativa - Nivel Avanzado</div>
+            <div class="edu-inst">SENA · <em>vigencia vencida</em></div>
+          </div>
+          <span class="edu-year">May 2022</span>
+        </div>
+        <div class="credencial">
+          <div>
+            <div class="edu-title">Manejo Básico de la Herramienta de Hojas de Cálculo Excel</div>
+            <div class="edu-inst">SENA · 40 horas</div>
+          </div>
+          <span class="edu-year">May 2022</span>
+        </div>
+    </section>
+
+    <section class="section">
+      <h2>Stack técnico</h2>
+      <div class="tech-grid">
+        <span class="tech-tag destacada">Python</span>
+        <span class="tech-tag destacada">SQL</span>
+        <span class="tech-tag destacada">JavaScript</span>
+        <span class="tech-tag">React</span>
+        <span class="tech-tag">Node.js</span>
+        <span class="tech-tag">HTML5 / CSS3</span>
+        <span class="tech-tag destacada">Power BI</span>
+        <span class="tech-tag">Excel</span>
+        <span class="tech-tag">Pandas · NumPy · Matplotlib</span>
+        <span class="tech-tag">MySQL · PostgreSQL · Redis</span>
+        <span class="tech-tag">Docker</span>
+        <span class="tech-tag">APIs REST</span>
+        <span class="tech-tag">Automatización RPA</span>
+        <span class="tech-tag">Git</span>
+        <span class="tech-tag">IA Generativa</span>
+      </div>
+      <div class="idiomas">
+        <span>Español — Nativo</span>
+        <span>Inglés — A2</span>
+      </div>
+      <div class="competencias">Pensamiento analítico · Resolución de problemas · Comunicación efectiva · Optimización de procesos · Trabajo en equipo · Adaptabilidad</div>
+    </section>
+
+    <section class="section">
+      <h2>Referencia laboral</h2>
+      <div class="ref-card">
+        <strong>Daniel Alejandro Rincón Hernández</strong>
+        <em>Supervisor · Arise Systems Firm S.A.S · Abr 2026</em>
+        <p>"William es un buen elemento, un trabajador responsable, dedicado e inteligente. Tiene la capacidad de adaptarse a las problemáticas y encontrar la solución más óptima. Es un compañero solidario con su equipo de trabajo y posee sólidas bases de habilidades blandas."</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+</body>
+</html>

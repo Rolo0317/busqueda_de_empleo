@@ -1,17 +1,25 @@
-import { peticion } from './client';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
+import { llamar } from './rpc';
 
-export interface Usuario {
-  usuario: string;
-  debeCambiarPassword: boolean;
+export async function iniciarSesion(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error('Correo o contraseña incorrectos.');
 }
 
-export const iniciarSesion = (usuario: string, password: string): Promise<Usuario> =>
-  peticion<Usuario>('/api/auth/login/', { metodo: 'POST', cuerpo: { usuario, password } });
+export async function cerrarSesion(): Promise<void> {
+  await supabase.auth.signOut();
+}
 
-export const cerrarSesion = (): Promise<void> =>
-  peticion<void>('/api/auth/logout/', { metodo: 'POST' });
+export async function sesionActual(): Promise<Session | null> {
+  const { data } = await supabase.auth.getSession();
+  return data.session;
+}
 
-export const sesionActual = (): Promise<Usuario> => peticion<Usuario>('/api/auth/me/');
+/** Tener cuenta no basta: solo los operadores ven y disparan el bot. */
+export const esOperador = (): Promise<boolean> => llamar<boolean>('empleo_es_operador');
 
-export const cambiarPassword = (actual: string, nueva: string): Promise<Usuario> =>
-  peticion<Usuario>('/api/auth/password/', { metodo: 'POST', cuerpo: { actual, nueva } });
+export function alCambiarSesion(manejar: (sesion: Session | null) => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((_evento, sesion) => manejar(sesion));
+  return () => data.subscription.unsubscribe();
+}

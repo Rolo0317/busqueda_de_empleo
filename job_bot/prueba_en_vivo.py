@@ -20,7 +20,7 @@ from config import load_settings
 from models.job_offer import JobOffer
 from platforms.magneto import MagnetoPlatform
 from services.analyzer import OfferAnalyzer
-from services.tracker import MySqlApplicationTracker
+from services.tracker import crear_tracker
 
 ANCHO = 88
 
@@ -48,20 +48,7 @@ class Auditoria:
 
 
 def ofertas_pendientes(tracker, settings, cuantas: int) -> list[JobOffer]:
-    with tracker._connect() as conexion:
-        cursor = conexion.cursor(dictionary=True)
-        cursor.execute(
-            """SELECT title, company_name, url, salary, location FROM jobs
-               WHERE platform = 'Magneto' AND status = 'found' AND match_score >= %s
-               ORDER BY match_score DESC LIMIT %s""",
-            (settings.min_match_score, cuantas),
-        )
-        filas = cursor.fetchall()
-
-    return [JobOffer(platform="Magneto", title=f["title"], url=f["url"],
-                     company=f["company_name"] or "No especificada",
-                     salary=f["salary"] or "No especificado",
-                     city=f["location"] or "No especificada") for f in filas]
+    return tracker.ofertas_pendientes("Magneto", settings.min_match_score, cuantas)
 
 
 def todas_caducadas(plataforma: MagnetoPlatform, ofertas: list[JobOffer]) -> bool:
@@ -104,7 +91,7 @@ def main() -> int:
     cuantas = int(sys.argv[1]) if len(sys.argv) > 1 else 5
 
     settings = load_settings()
-    tracker = MySqlApplicationTracker(settings)
+    tracker = crear_tracker(settings)
     analyzer = OfferAnalyzer(settings)
     auditoria = Auditoria()
 

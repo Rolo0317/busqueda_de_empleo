@@ -1,12 +1,16 @@
+import { useCallback, useState } from 'react';
 import { BotPanel } from './components/BotPanel';
 import { JobsTable } from './components/JobsTable';
 import { LoginForm } from './components/LoginForm';
-import { PasswordChangeForm } from './components/PasswordChangeForm';
+import { Overview } from './components/Overview';
 import { useSession } from './hooks/useSession';
 import './App.css';
 
 export default function App() {
-  const { estado, usuario, entrar, salir, marcarPasswordCambiada } = useSession();
+  const { estado, correo, entrar, salir } = useSession();
+  // Sube cada vez que termina una corrida: resumen, grafica y listado se recargan.
+  const [version, setVersion] = useState(0);
+  const alTerminarCorrida = useCallback(() => setVersion((v) => v + 1), []);
 
   if (estado === 'comprobando') {
     return <main className="pantalla"><p className="apoyo">Comprobando sesión…</p></main>;
@@ -16,12 +20,14 @@ export default function App() {
     return <main className="pantalla"><LoginForm onEntrar={entrar} /></main>;
   }
 
-  // La clave temporal bloquea todo lo demas: no es un aviso que se pueda saltar.
-  if (usuario?.debeCambiarPassword === true) {
+  if (estado === 'sin-permiso') {
     return (
       <main className="pantalla">
-        <PasswordChangeForm onCambiada={marcarPasswordCambiada} />
-        <button onClick={() => void salir()} className="secundario">Salir</button>
+        <section className="tarjeta">
+          <h1>Sin acceso</h1>
+          <p className="apoyo">La cuenta {correo} no está autorizada para operar el bot.</p>
+          <button type="button" className="secundario" onClick={() => void salir()}>Salir</button>
+        </section>
       </main>
     );
   }
@@ -31,12 +37,14 @@ export default function App() {
       <header className="barra">
         <h1>Panel de postulación</h1>
         <div className="sesion">
-          <span>{usuario?.usuario}</span>
-          <button onClick={() => void salir()} className="secundario">Salir</button>
+          <a href="/" className="enlace">Hoja de vida</a>
+          <span>{correo}</span>
+          <button type="button" onClick={() => void salir()} className="secundario">Salir</button>
         </div>
       </header>
-      <BotPanel />
-      <JobsTable />
+      <BotPanel onCorridaTerminada={alTerminarCorrida} />
+      <Overview version={version} />
+      <JobsTable version={version} />
     </main>
   );
 }

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { listarVacantes, type Estado, type RespuestaVacantes } from '../api/vacantes';
+import {
+  LIMITE_LISTADO,
+  listarVacantes,
+  UMBRAL_CALIFICA as UMBRAL,
+  type Estado,
+  type RespuestaVacantes,
+} from '../api/vacantes';
 
-const UMBRAL = 45;
 const ESPERA_ESCRITURA_MS = 300;
 
 const ESTADOS: ReadonlyArray<{ valor: Estado; etiqueta: string }> = [
@@ -9,6 +14,7 @@ const ESTADOS: ReadonlyArray<{ valor: Estado; etiqueta: string }> = [
   { valor: 'found', etiqueta: 'Sin postular' },
   { valor: 'applied', etiqueta: 'Postuladas' },
   { valor: 'discarded', etiqueta: 'Descartadas' },
+  { valor: 'no_available', etiqueta: 'No disponibles' },
 ];
 
 function Esqueleto() {
@@ -27,7 +33,11 @@ function Esqueleto() {
   );
 }
 
-export function JobsTable() {
+interface Props {
+  version: number;
+}
+
+export function JobsTable({ version }: Props) {
   const [datos, setDatos] = useState<RespuestaVacantes | null>(null);
   const [busqueda, setBusqueda] = useState('');
   const [soloCalificadas, setSoloCalificadas] = useState(true);
@@ -47,27 +57,18 @@ export function JobsTable() {
     }
   }, [busqueda, soloCalificadas, estado]);
 
-  // Se espera a que el usuario deje de escribir antes de consultar.
+  // Se espera a que el usuario deje de escribir antes de consultar. `version`
+  // cambia al terminar una corrida y fuerza la recarga.
   useEffect(() => {
     const id = setTimeout(() => void cargar(), ESPERA_ESCRITURA_MS);
     return () => clearTimeout(id);
-  }, [cargar]);
+  }, [cargar, version]);
 
-  const resumen = datos?.resumen;
   const hayFiltro = busqueda !== '' || estado !== '' || soloCalificadas;
 
   return (
     <section className="tarjeta" aria-labelledby="titulo-vacantes">
       <h2 id="titulo-vacantes">Vacantes</h2>
-
-      {resumen && (
-        <dl className="estado">
-          <div><dt>Total</dt><dd>{resumen.total}</dd></div>
-          <div><dt>Califican</dt><dd className="vivo">{resumen.calificadas}</dd></div>
-          <div><dt>Postuladas</dt><dd>{resumen.aplicadas}</dd></div>
-          <div><dt>Score prom.</dt><dd>{resumen.promedio}</dd></div>
-        </dl>
-      )}
 
       <div className="filtros">
         <input
@@ -110,7 +111,7 @@ export function JobsTable() {
           <p className="apoyo" aria-live="polite">
             {datos.total === 0
               ? 'Ninguna vacante coincide.'
-              : `Mostrando ${datos.mostradas} de ${datos.total}, las de mayor puntaje.`}
+              : `Mostrando ${Math.min(datos.total, LIMITE_LISTADO)} de ${datos.total}, las de mayor puntaje.`}
           </p>
 
           {datos.total === 0 ? (
