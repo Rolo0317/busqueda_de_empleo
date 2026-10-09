@@ -33,6 +33,21 @@ CASOS = [
     ("Consultor(a) Líder En Inteligencia Artificial Y Analítica", Encaje.OBJETIVO),
     ("Especialista de Aplicaciones Backend", Encaje.OBJETIVO),
     ("Ingeniero de datos y analítica senior", Encaje.OBJETIVO),
+    # Auditoria del 09/10/2026: cargos reales del perfil que salian como "no reconocidos".
+    ("Analista de Inteligencia de Negocios", Encaje.OBJETIVO),
+    ("Business Analyst (B2+)", Encaje.OBJETIVO),
+    ("Analista de Reporting", Encaje.OBJETIVO),
+    ("QA Engineer", Encaje.OBJETIVO),
+    ("Analista TI", Encaje.OBJETIVO),
+    ("Analista AI HUB", Encaje.OBJETIVO),
+    ("Real Time Analyst", Encaje.ADYACENTE),
+    ("Analista Mr Mejora Continua", Encaje.ADYACENTE),
+    ("Profesional de Transformación de Procesos", Encaje.ADYACENTE),
+    # ...y los parecidos que no deben colarse con esa ampliacion.
+    ("Auxiliar de procesos", Encaje.RETROCESO),
+    ("Operador de monitoreo", Encaje.DESCONOCIDO),
+    ("Jefe de Desarrollo Comercial", Encaje.RETROCESO),
+    ("Digital Marketing Analyst", Encaje.DESCONOCIDO),
     # Cargos reales que el filtro perdia por nombrar la herramienta y no el rol.
     ("Ingeniero en Python", Encaje.OBJETIVO),
     ("BI Analyst II", Encaje.OBJETIVO),

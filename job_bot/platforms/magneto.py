@@ -25,7 +25,9 @@ from models.job_offer import JobOffer
 from platforms import lectura_oferta as lectura
 from platforms.base import BasePlatform
 from platforms.cuestionario import CuestionarioMagneto, Pregunta
+from platforms.login_magneto import LoginMagneto
 from services.ai_answerer import FreeAiAnswerClient
+from services.lector_codigos import crear_fuente_de_codigos
 from services.question_answerer import CandidateQuestionAnswerer
 
 
@@ -63,6 +65,8 @@ class MagnetoPlatform(BasePlatform):
     MARCAS_ANONIMO = ("iniciar sesion", "crear cuenta", "registrate")
     TEXTO_MINIMO_PAGINA = 200
     INTENTOS_SESION = 15
+    PAGINAS_POR_BUSQUEDA = 3
+    MS_ESPERA_PAGINA = 4000
     VUELTAS_MAXIMAS = 8
 
     def __init__(self, navegador: Navegador, settings: Settings, tracker=None) -> None:
@@ -84,12 +88,30 @@ class MagnetoPlatform(BasePlatform):
             logging.info("Sesion de Magneto detectada.")
             return
 
+        if self.settings.magneto_email and self._iniciar_sesion_automatica():
+            self.abrir(f"{self.BASE_URL}/co")
+            if self._hay_sesion():
+                logging.info("Sesion de Magneto iniciada automaticamente.")
+                return
+
         # Sin sesion, Magneto sirve el formulario anonimo y toda la corrida se
         # desperdicia. Es preferible detenerse que postular en el vacio.
         raise RuntimeError(
             "No hay sesion de Magneto en el navegador. Inicia sesion en la ventana "
-            "abierta por abrir_navegador_bot.ps1 y vuelve a lanzar el bot."
+            "abierta por abrir_navegador_bot.ps1; el bot lo reintenta en el siguiente ciclo."
         )
+
+    def _iniciar_sesion_automatica(self) -> bool:
+        logging.info("Sin sesion de Magneto: iniciando sesion con codigo al correo...")
+        login = LoginMagneto(
+            self.pagina,
+            self.settings.magneto_email,
+            crear_fuente_de_codigos(self.settings.magneto_email, self.settings.correo_codigos_clave_app),
+            self.settings.minutos_espera_login_manual,
+        )
+        resultado = login.iniciar()
+        logging.info("Login de Magneto: %s", resultado.motivo)
+        return resultado.exito
 
     def _hay_sesion(self) -> bool:
         for intento in range(self.INTENTOS_SESION):
@@ -114,13 +136,35 @@ class MagnetoPlatform(BasePlatform):
 
         ofertas = self._leer_resultados(filtro=None)
         if ofertas:
-            return ofertas
+            return self._sumar_paginas_siguientes(ofertas)
 
         logging.info("Busqueda por URL sin resultados. Usando pagina de ciudad para: %s", keyword)
         ciudad = lectura.slug(self.settings.magneto_city)
         if not self.abrir(f"{self.BASE_URL}/co/trabajos/ofertas-empleo-en-{ciudad}/"):
             return []
         return self._leer_resultados(filtro=keyword)
+
+    def _sumar_paginas_siguientes(self, ofertas: list[JobOffer]) -> list[JobOffer]:
+        """Magneto pagina en el navegador: la URL ?paginator[page]=2 cargada
+        directamente devuelve la pagina 1, asi que hay que pulsar el enlace.
+        Antes solo se leia la primera pagina (auditoria del 09/10)."""
+        vistas = {str(o.url) for o in ofertas}
+        for numero in range(2, self.PAGINAS_POR_BUSQUEDA + 1):
+            enlace = self.pagina.locator(f'a[href*="paginator[page]={numero}"]')
+            if not enlace.count():
+                break
+            try:
+                enlace.first.click()
+                self.pagina.wait_for_timeout(self.MS_ESPERA_PAGINA)
+            except PlaywrightTimeout:
+                break
+            nuevas = [o for o in self._leer_resultados(filtro=None) if str(o.url) not in vistas]
+            if not nuevas:
+                break
+            vistas.update(str(o.url) for o in nuevas)
+            ofertas.extend(nuevas)
+        logging.info("Magneto: %s ofertas en total para esta busqueda", len(ofertas))
+        return ofertas
 
     def _leer_resultados(self, filtro: str | None) -> list[JobOffer]:
         try:

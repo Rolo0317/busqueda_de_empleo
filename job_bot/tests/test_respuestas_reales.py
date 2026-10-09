@@ -139,6 +139,15 @@ CASOS = [
      lambda r: r == "A2", "A2"),
     ("¿Qué experiencia tiene manejando flujos de integración continua y despliegue continuo (CI/CD)?", [],
      lambda r: r.lower().startswith("no tengo experiencia en"), "un no honesto sobre CI/CD"),
+    # Auditoria del 09/10: con una tecnologia fuera del perfil caia a los anos totales.
+    ("¿Cuántos años de experiencia tienes en Java?", [],
+     lambda r: r.strip() == "0", "0 (Java no esta en el perfil)"),
+    ("¿Cuántos años de experiencia tienes trabajando con PL/SQL?", [],
+     lambda r: r.strip() == "0", "0 (PL/SQL no es el SQL del perfil)"),
+    ("¿Cuántos años de experiencia tienes trabajando con AWS Aurora?", [],
+     lambda r: not r.strip().isdigit(), "sin una cifra inventada"),
+    ("¿Cuántos años de experiencia tienes en el cargo?", [],
+     lambda r: r.strip().isdigit() and r.strip() != "0", "los anos totales"),
     # Pregunta real del 08/10: "has trabajado" no es "trabajaste en esta empresa".
     ("¿Con qué motores de bases de datos has trabajado?", [],
      lambda r: "empresa" not in r.lower(), "los motores del perfil, no un vinculo con la empresa"),

@@ -11,6 +11,8 @@ import re
 import unicodedata
 from typing import Any
 
+from services.relevancia_cargo import STACK_AJENO
+
 # Como se nombra cada tecnologia en las preguntas -> clave en experience_years.
 ALIAS: dict[str, str] = {
     "python": "python",
@@ -113,6 +115,42 @@ ANULA: dict[str, tuple[str, ...]] = {
 # casi se contesto "Mas de 2 anos" sin haber usado nunca Oracle (3 de octubre).
 SQL_AJENO = ("oracle", "pl/sql", "plsql", "pl sql", "t-sql", "tsql")
 SQL_GENERICO = ("sql", "base de datos", "bases de datos")
+
+
+# Lo que el perfil no maneja, venga del filtro de cargos (Java, .NET, SAP...) o
+# de las variantes de SQL que no registra. Una sola lista para ambos usos.
+TECNOLOGIAS_AJENAS = tuple(dict.fromkeys(STACK_AJENO + SQL_AJENO))
+
+# Lo que va despues de "experiencia en/con..." y no nombra una tecnologia, sino
+# la trayectoria en general: ahi si valen los anos totales.
+CONTEXTOS_GENERICOS = (
+    "el cargo", "este cargo", "el rol", "este rol", "la posicion", "esta posicion",
+    "cargos similares", "cargos afines", "roles similares", "posiciones similares",
+    "funciones similares", "el area", "esta area", "el campo", "total", "general",
+)
+TEMA_DE_EXPERIENCIA = re.compile(
+    r"\b(?:en|con|usando|manejando|utilizando|desarrollando|programando)\s+(.+)$"
+)
+
+
+def tecnologia_ajena(texto: str) -> str | None:
+    """La primera tecnologia que nombra el texto y que el perfil no tiene."""
+    normalizado = plano(texto)
+    return next((t for t in TECNOLOGIAS_AJENAS if _menciona(t, normalizado)), None)
+
+
+def pregunta_por_algo_especifico(texto: str) -> bool:
+    """Si la pregunta de anos nombra un tema concreto en lugar de la trayectoria.
+
+    "¿Cuantos anos de experiencia tienes?" admite los anos totales; "¿cuantos anos
+    trabajando con AWS Aurora?" no: responder 6 seria inventar experiencia.
+    """
+    normalizado = plano(texto).strip(" ?¿.!")
+    _, _, despues = normalizado.partition("experiencia")
+    tema = TEMA_DE_EXPERIENCIA.search(despues or normalizado)
+    if not tema:
+        return False
+    return not tema.group(1).strip().startswith(CONTEXTOS_GENERICOS)
 
 
 def plano(texto: str) -> str:

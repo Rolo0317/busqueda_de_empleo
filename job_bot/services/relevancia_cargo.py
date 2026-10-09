@@ -37,7 +37,7 @@ class Valoracion:
 # y cada una volvio como descarte automatico.
 FUERA_DEL_PERFIL = (
     "desarrollador de negocio", "desarrolladora de negocio", "desarrollo de negocio",
-    "desarrollador comercial", "desarrolladora comercial",
+    "desarrollador comercial", "desarrolladora comercial", "desarrollo comercial",
     "consultor de negocios", "plc", "hmi", "cnc", "torno", "mecanizado",
     "nomina", "talento humano", "cultura y desarrollo",
 )
@@ -73,6 +73,13 @@ CARGOS_OBJETIVO = (
     # ("Ingeniero en Python", "BI Analyst II", "DBA SQL Junior").
     "python", "sql", "dba", "bi", "datos", "data", "sistemas", "programacion",
     "tecnologia", "tic", "ia", "api", "integraciones", "base de datos",
+    # Auditoria del 09/10/2026: titulos de su oficio que se descartaban como
+    # "no reconocidos" (16 mil descartes en los logs, la causa numero uno).
+    "inteligencia de negocios", "business analyst", "analista de negocio",
+    "reporting", "qa", "quality assurance", "tester", "pruebas de software",
+    "analista ti", "ti", "it", "ai", "aplicaciones",
+    "ingeniero desarrollo", "ingeniero de desarrollo",
+    "soluciones digitales", "transformacion digital",
 )
 
 # Cargos que aprovechan su experiencia en torre de control y BPO.
@@ -80,6 +87,16 @@ CARGOS_ADYACENTES = (
     "workforce", "gtr", "controller", "torre de control", "wfm",
     "analista de operaciones", "planeacion operativa", "reporteria",
     "kpi", "indicadores",
+    # Auditoria del 09/10/2026: control de operacion, procesos y mejora, donde
+    # pesan la torre de control y la automatizacion.
+    # Terminos compuestos a proposito: "procesos" o "monitoreo" solos colaban
+    # "auxiliar de procesos" u "operador de monitoreo" (camaras de seguridad).
+    "real time", "tiempo real", "analista de monitoreo", "ingeniero de monitoreo",
+    "analista de planeacion", "gestion de operaciones", "operations analyst",
+    "gestion y control", "control de gestion", "inteligencia operacional",
+    "gestion del servicio", "mejora continua", "excelencia operacional",
+    "analista de procesos", "ingeniero de procesos", "transformacion de procesos",
+    "analista de innovacion", "especialista de innovacion", "crm", "itsm", "pricing",
 )
 
 # Cargos por debajo del perfil: operativos o comerciales de primera linea.

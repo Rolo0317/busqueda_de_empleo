@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 from typing import Any
-from services.anios_tecnologia import anios_de
+from services.anios_tecnologia import anios_de, pregunta_por_algo_especifico, tecnologia_ajena
 from services.criterio_situacional import elegir as elegir_por_criterio
 from services.eleccion_opciones import EleccionDeOpciones
 from services.respuestas_locales import RespuestasLocales
@@ -379,6 +379,13 @@ class CandidateQuestionAnswerer:
             if mencion is not None:
                 keyword, value = mencion
                 return AnswerDecision(f"{value:g}", 0.9, f"Experiencia en {keyword}", True)
+            # Antes caia a los anos totales con cualquier tecnologia: "¿cuantos
+            # anos tienes en Java?" se contestaba "6" sin haber usado Java (09/10).
+            ajena = tecnologia_ajena(question)
+            if ajena:
+                return AnswerDecision("0", 0.85, f"El perfil no registra {ajena}", True)
+            if pregunta_por_algo_especifico(question):
+                return self._skip("Piden anos en algo que el perfil no registra")
             if years.get("total") is not None:
                 return AnswerDecision(str(years["total"]), 0.75, "Experiencia total", True)
 

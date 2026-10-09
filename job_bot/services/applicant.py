@@ -1,10 +1,11 @@
 import logging
+from collections import Counter
 from time import sleep
 
 from models.job_offer import JobOffer
 from platforms.base import BasePlatform
 from services.analyzer import OfferAnalyzer
-from services.relevancia_cargo import RelevanciaDelCargo
+from services.relevancia_cargo import Encaje, RelevanciaDelCargo
 from services.zona import ciudad_lejana
 from services.tracker import ApplicationTracker
 
@@ -12,6 +13,10 @@ from core.url_utils import canonicalize_url
 
 
 class ApplicationSummary:
+    # Muestra de cargos no reconocidos por ciclo: basta para auditar el filtro
+    # sin llenar el log.
+    MUESTRA_NO_RECONOCIDOS = 15
+
     def __init__(self) -> None:
         self.reviewed = 0
         self.applied = 0
@@ -22,6 +27,16 @@ class ApplicationSummary:
         self.low_score = 0
         self.questions_answered = 0
         self.questions_skipped = 0
+        # Por que se descarto cada oferta fuera del perfil. Sin esto, el motivo
+        # numero uno ("cargo no reconocido") paso semanas sin verse.
+        self.motivos_descarte: Counter[str] = Counter()
+        self.no_reconocidos: list[str] = []
+
+    def registrar_descarte(self, motivo: str, cargo: str, reconocido: bool) -> None:
+        self.motivos_descarte[motivo.split(":")[0]] += 1
+        if not reconocido and len(self.no_reconocidos) < self.MUESTRA_NO_RECONOCIDOS:
+            if cargo not in self.no_reconocidos:
+                self.no_reconocidos.append(cargo)
 
 
 class JobApplicant:
@@ -103,6 +118,8 @@ class JobApplicant:
             if not encaje.vale_la_pena:
                 summary.skipped += 1
                 summary.off_profile += 1
+                summary.registrar_descarte(encaje.motivo, offer.title[:70],
+                                           reconocido=encaje.encaje is not Encaje.DESCONOCIDO)
                 logging.debug("Fuera del perfil | %s | %s", encaje.motivo, offer.title[:70])
                 seen_urls.add(offer_url)
                 continue
@@ -111,6 +128,7 @@ class JobApplicant:
             if lejana:
                 summary.skipped += 1
                 summary.off_profile += 1
+                summary.registrar_descarte("Fuera de zona", offer.title[:70], reconocido=True)
                 logging.debug("Fuera de zona (%s, sin reubicacion) | %s", lejana, offer.title[:70])
                 seen_urls.add(offer_url)
                 continue

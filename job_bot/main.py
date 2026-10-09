@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from time import sleep
+from time import sleep, time
 
 from browser.navegador import Navegador, NavegadorNoDisponible
 from config import PerfilNoEncontrado, Settings, cargar_perfil, load_settings
@@ -20,6 +20,9 @@ from services.searcher import JobSearcher
 from services.tracker import ApplicationTracker, crear_tracker
 
 CICLOS_ENTRE_REVISIONES_DE_SESION = 5
+# Una plataforma que perdio la sesion se reintenta, pero no mas de una vez por
+# hora: cada intento de Magneto manda un codigo al correo.
+MINUTOS_ENTRE_REINTENTOS_DE_SESION = 60
 
 
 def configure_logging() -> None:
@@ -74,6 +77,10 @@ def log_summary(summary: ApplicationSummary) -> None:
         summary.reviewed, summary.applied, summary.errors, summary.skipped,
         summary.duplicates, summary.off_profile, summary.low_score,
     )
+    for motivo, veces in summary.motivos_descarte.most_common(6):
+        logging.info("  descarte | %4d | %s", veces, motivo)
+    if summary.no_reconocidos:
+        logging.info("  cargos no reconocidos (muestra): %s", " · ".join(summary.no_reconocidos))
     print(
         f"\n{'=' * 78}\n"
         f"  Ofertas revisadas:      {summary.reviewed}\n"
@@ -101,21 +108,60 @@ def log_preguntas_aprendidas(tracker: ApplicationTracker) -> None:
                      patron[:80], datos["count"], datos["avg_confidence"] * 100)
 
 
-def revisar_sesiones(platforms: dict) -> None:
-    """Deja solo las plataformas con sesion activa.
+def con_sesion(platforms: dict) -> dict:
+    """Las plataformas que tienen (o logran iniciar) sesion.
 
     Que caduque la sesion de una no debe parar a las demas: antes, perder la de
     Magneto detenia tambien Computrabajo, que seguia con su sesion intacta.
     """
-    for nombre, plataforma in list(platforms.items()):
+    activas = {}
+    for nombre, plataforma in platforms.items():
         try:
             plataforma.ensure_logged_in()
+            activas[nombre] = plataforma
         except Exception as error:
-            logging.warning("%s queda fuera de esta corrida: %s", nombre, str(error)[:120])
-            del platforms[nombre]
-    if not platforms:
-        raise RuntimeError("Ninguna plataforma tiene sesion iniciada.")
-    logging.info("Plataformas activas: %s", ", ".join(platforms))
+            logging.warning("%s sin sesion por ahora: %s", nombre, str(error)[:120])
+    return activas
+
+
+class ControlDeSesiones:
+    """Decide que plataformas trabajan en cada ciclo.
+
+    Antes, una plataforma sin sesion al arrancar quedaba fuera de TODA la
+    corrida continua aunque luego se iniciara sesion (07/10). Ahora se
+    reintenta, pero no en cada ciclo: cada intento de Magneto manda un codigo
+    al correo y puede esperar a la persona varios minutos.
+    """
+
+    def __init__(self, todas: dict) -> None:
+        self.todas = todas
+        self.activas: dict = {}
+        self._ultimo_intento: dict[str, float] = {}
+
+    def revisar_todas(self) -> dict:
+        self._marcar_intento(self.todas)
+        self.activas = con_sesion(self.todas)
+        self._informar()
+        return self.activas
+
+    def reintentar_caidas(self) -> dict:
+        limite = time() - MINUTOS_ENTRE_REINTENTOS_DE_SESION * 60
+        caidas = {n: p for n, p in self.todas.items()
+                  if n not in self.activas and self._ultimo_intento.get(n, 0) < limite}
+        if caidas:
+            self._marcar_intento(caidas)
+            recuperadas = con_sesion(caidas)
+            if recuperadas:
+                self.activas = {**self.activas, **recuperadas}
+                self._informar()
+        return self.activas
+
+    def _marcar_intento(self, plataformas: dict) -> None:
+        for nombre in plataformas:
+            self._ultimo_intento[nombre] = time()
+
+    def _informar(self) -> None:
+        logging.info("Plataformas activas: %s", ", ".join(self.activas) or "ninguna")
 
 
 def main() -> None:
@@ -135,11 +181,13 @@ def main() -> None:
 
     try:
         with Navegador(settings) as navegador:
-            platforms = registry.crear(settings.enabled_platforms, navegador, settings, tracker)
+            sesiones = ControlDeSesiones(
+                registry.crear(settings.enabled_platforms, navegador, settings, tracker))
             tracker.ensure_questions_table()
 
             logging.info("Verificando sesiones...")
-            revisar_sesiones(platforms)
+            if not sesiones.revisar_todas():
+                raise RuntimeError("Ninguna plataforma tiene sesion iniciada.")
 
             while True:
                 ciclos += 1
@@ -148,14 +196,19 @@ def main() -> None:
 
                 # Una revision de sesion fallida no puede terminar la corrida:
                 # asi murio el bot tras cinco ciclos, con el navegador aun vivo.
-                if ciclos % CICLOS_ENTRE_REVISIONES_DE_SESION == 0:
-                    try:
-                        revisar_sesiones(platforms)
-                    except Exception as error:
-                        logging.warning("No se pudo revisar la sesion: %s", str(error)[:90])
+                try:
+                    if ciclos % CICLOS_ENTRE_REVISIONES_DE_SESION == 0:
+                        sesiones.revisar_todas()
+                    else:
+                        sesiones.reintentar_caidas()
+                except Exception as error:
+                    logging.warning("No se pudo revisar la sesion: %s", str(error)[:90])
 
                 try:
-                    log_summary(run_cycle(settings, perfil, platforms, tracker))
+                    if sesiones.activas:
+                        log_summary(run_cycle(settings, perfil, sesiones.activas, tracker))
+                    else:
+                        logging.warning("Ninguna plataforma con sesion en este ciclo.")
                 except Exception:
                     logging.exception("Error en el ciclo #%d", ciclos)
 

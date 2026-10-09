@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     supabase_publishable_key: str = Field(default="", alias="SUPABASE_PUBLISHABLE_KEY")
     supabase_email: str = Field(default="", alias="SUPABASE_EMAIL")
     supabase_password: str = Field(default="", alias="SUPABASE_PASSWORD")
+    # Login automatico de Magneto (codigo de 6 digitos al correo). Sin
+    # MAGNETO_EMAIL el bot no intenta entrar solo; sin la clave de aplicacion
+    # de Gmail, pide el codigo a la persona y la espera.
+    magneto_email: str = Field(default="", alias="MAGNETO_EMAIL")
+    correo_codigos_clave_app: str = Field(default="", alias="CORREO_CODIGOS_CLAVE_APP")
+    minutos_espera_login_manual: int = Field(default=10, ge=1, alias="MINUTOS_ESPERA_LOGIN_MANUAL")
     ats_ai_provider: str = Field(default="auto", alias="ATS_AI_PROVIDER")
     gemini_api_key: str = Field(default="", alias="GEMINI_API_KEY")
     gemini_model: str = Field(default="gemini-2.5-flash", alias="GEMINI_MODEL")
