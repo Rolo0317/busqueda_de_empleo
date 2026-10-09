@@ -275,11 +275,23 @@ class RespuestasLocales:
             return f"{base} {controles}"
         return base
 
-    @staticmethod
-    def _es_vinculo_empresa(t: str) -> bool:
-        marcas = ("has trabajado", "trabajaste", "experiencia laboral previa con",
-                  "trabajado en la empresa", "vinculo con la empresa", "ex empleado")
-        return any(m in t for m in marcas)
+    # Siempre hablan de un vinculo previo con la empresa que ofrece el cargo.
+    MARCAS_VINCULO_EMPRESA = ("experiencia laboral previa con", "trabajado en la empresa",
+                              "vinculo con la empresa", "ex empleado", "exempleado",
+                              "con nosotros", "para nosotros", "en nuestra compania",
+                              "en nuestra empresa", "sus filiales")
+    # Solo cuentan si ademas nombran a la empresa: "¿con que motores de bases
+    # de datos has trabajado?" no pregunta por un empleo anterior alli.
+    MARCAS_TRABAJO_PREVIO = ("has trabajado", "trabajaste", "ha laborado", "laboraste")
+    REFERENCIAS_A_LA_EMPRESA = ("esta empresa", "la empresa", "esta compania", "la compania",
+                                "esta organizacion", "la organizacion", "el grupo", "filial")
+
+    @classmethod
+    def _es_vinculo_empresa(cls, t: str) -> bool:
+        if any(m in t for m in cls.MARCAS_VINCULO_EMPRESA):
+            return True
+        return (any(m in t for m in cls.MARCAS_TRABAJO_PREVIO)
+                and any(r in t for r in cls.REFERENCIAS_A_LA_EMPRESA))
 
     def _decir_vinculo_empresa(self, t: str) -> str:
         """Nunca afirma un empleo que el perfil no registra."""

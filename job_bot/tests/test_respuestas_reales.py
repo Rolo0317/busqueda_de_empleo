@@ -139,6 +139,11 @@ CASOS = [
      lambda r: r == "A2", "A2"),
     ("¿Qué experiencia tiene manejando flujos de integración continua y despliegue continuo (CI/CD)?", [],
      lambda r: r.lower().startswith("no tengo experiencia en"), "un no honesto sobre CI/CD"),
+    # Pregunta real del 08/10: "has trabajado" no es "trabajaste en esta empresa".
+    ("¿Con qué motores de bases de datos has trabajado?", [],
+     lambda r: "empresa" not in r.lower(), "los motores del perfil, no un vinculo con la empresa"),
+    ("¿Has trabajado anteriormente en esta empresa o en alguna de sus filiales?", [],
+     lambda r: r.strip().lower().startswith("no"), "No (no trabajo alli)"),
     ("¿Cuál es tu nivel de conocimiento en SQL?",
      ["Sin experiencia", "Básico", "Intermedio", "Avanzado"],
      lambda r: r.lower() in ("avanzado", "intermedio"), "Avanzado o Intermedio"),
