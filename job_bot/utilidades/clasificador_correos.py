@@ -77,7 +77,8 @@ REGLAS_URGENTES: tuple[tuple[Categoria, str, tuple[str, ...]], ...] = (
         "completa el test", "completa la evaluacion", "inicia las evaluaciones",
         "completa el juego", "prueba tecnica", "assessment", "evaluaciones ya estan listas",
         "completa esta etapa", "test para continuar", "pruebas psicotecnicas",
-        "avanzaste a la siguiente etapa",
+        "avanzaste a la siguiente etapa", "responde el test", "responder a el test",
+        "responder el test", "realizar test",
     )),
     (Categoria.ACCION_REQUERIDA, "Citan a entrevista", (
         "entrevista", "agenda tu", "agendar una cita", "programar una llamada",

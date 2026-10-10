@@ -18,6 +18,7 @@ from postulacion.applicant import ApplicationSummary, JobApplicant
 from postulacion.relevancia_cargo import RelevanciaDelCargo
 from postulacion.searcher import JobSearcher
 from almacenamiento.tracker import ApplicationTracker, crear_tracker
+from seguimiento.seguimiento_correo import crear_seguimiento
 
 CARPETA_LOGS = Path(__file__).resolve().parent / "logs"
 CICLOS_ENTRE_REVISIONES_DE_SESION = 5
@@ -179,6 +180,9 @@ def main() -> None:
         logging.error("%s", error)
         return
     tracker = crear_tracker(settings)
+    # Solo el tracker de Supabase tiene cliente: con MySQL no hay donde guardar eventos.
+    seguimiento = crear_seguimiento(settings.magneto_email, settings.correo_codigos_clave_app,
+                                    getattr(tracker, "cliente", None))
     ciclos = 0
 
     try:
@@ -213,6 +217,13 @@ def main() -> None:
                         logging.warning("Ninguna plataforma con sesion en este ciclo.")
                 except Exception:
                     logging.exception("Error en el ciclo #%d", ciclos)
+
+                # El seguimiento del correo es accesorio: nunca tumba un ciclo.
+                if seguimiento:
+                    try:
+                        seguimiento.revisar_si_toca()
+                    except Exception as error:
+                        logging.warning("Seguimiento del correo fallo: %s", str(error)[:90])
 
                 if not settings.run_continuously:
                     logging.info("Modo de ejecucion unica: terminando.")

@@ -3,6 +3,7 @@ import { BotPanel } from './components/BotPanel';
 import { JobsTable } from './components/JobsTable';
 import { LoginForm } from './components/LoginForm';
 import { Overview } from './components/Overview';
+import { Seguimiento } from './components/Seguimiento';
 import { useSession } from './hooks/useSession';
 import './App.css';
 
@@ -43,6 +44,7 @@ export default function App() {
         </div>
       </header>
       <BotPanel onCorridaTerminada={alTerminarCorrida} />
+      <Seguimiento version={version} />
       <Overview version={version} />
       <JobsTable version={version} />
     </main>
