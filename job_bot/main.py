@@ -15,6 +15,7 @@ from config import PerfilNoEncontrado, Settings, cargar_perfil, load_settings
 from plataformas import registry
 from postulacion.analyzer import OfferAnalyzer
 from postulacion.applicant import ApplicationSummary, JobApplicant
+from postulacion.memoria_descartes import DIAS_DE_MEMORIA, OfertasConocidas, huella_de_filtros
 from postulacion.relevancia_cargo import RelevanciaDelCargo
 from postulacion.searcher import JobSearcher
 from almacenamiento.tracker import ApplicationTracker, crear_tracker
@@ -69,8 +70,16 @@ def run_cycle(settings: Settings, perfil: dict, platforms: dict,
         ),
         ciudad_base=ciudad_base(perfil),
     )
-    ofertas = JobSearcher(platforms=platforms).search_many(settings.search_keywords)
-    return applicant.apply_to_offers(ofertas)
+    huella = huella_de_filtros(perfil, ciudad_base(perfil))
+    conocidas = OfertasConocidas(tracker.get_seen_urls() | tracker.urls_descartadas(huella, DIAS_DE_MEMORIA))
+    ofertas = JobSearcher(platforms=platforms).search_many(settings.search_keywords, conocidas)
+    summary = applicant.apply_to_offers(ofertas, conocidas)
+    # Un fallo al guardar la memoria solo cuesta reevaluar esas ofertas.
+    try:
+        tracker.registrar_descartes(summary.descartes, huella)
+    except Exception as error:
+        logging.warning("No se guardaron los descartes del ciclo: %s", str(error)[:90])
+    return summary
 
 
 def log_summary(summary: ApplicationSummary) -> None:

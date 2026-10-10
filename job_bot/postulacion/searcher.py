@@ -3,6 +3,7 @@ import logging
 from modelos.job_offer import JobOffer
 from utilidades.url_utils import canonicalize_url
 from plataformas.base import BasePlatform
+from postulacion.memoria_descartes import OfertasConocidas
 
 
 class JobSearcher:
@@ -11,7 +12,7 @@ class JobSearcher:
     def __init__(self, platforms: dict[str, BasePlatform]) -> None:
         self.platforms = platforms
 
-    def search_many(self, keywords: list[str]) -> list[JobOffer]:
+    def search_many(self, keywords: list[str], conocidas: OfertasConocidas) -> list[JobOffer]:
         offers_by_url: dict[str, JobOffer] = {}
 
         for nombre, plataforma in self.platforms.items():
@@ -19,7 +20,7 @@ class JobSearcher:
                 # Una plataforma caida no debe tumbar el ciclo completo: se
                 # registra y se sigue con las demas.
                 try:
-                    encontradas = plataforma.search(keyword)
+                    encontradas = plataforma.search(keyword, conocidas)
                 except Exception:
                     logging.exception("Fallo la busqueda en %s con '%s'", nombre, keyword)
                     continue

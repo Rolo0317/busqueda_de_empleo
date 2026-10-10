@@ -16,6 +16,7 @@ from utilidades.url_utils import canonicalize_url
 from modelos.job_offer import JobOffer
 from plataformas import lectura_oferta as lectura
 from plataformas.base import BasePlatform
+from postulacion.memoria_descartes import OfertasConocidas
 from plataformas.cuestionario_computrabajo import CuestionarioComputrabajo
 from respuestas.ai_answerer import FreeAiAnswerClient
 from respuestas.question_answerer import CandidateQuestionAnswerer
@@ -35,7 +36,6 @@ class ComputrabajoPlatform(BasePlatform):
     EXTRAS = "span.dIB"
     FECHA = "p.fs13"
     PATRON_SALARIO = re.compile(r"\$\s*[\d.,]+")
-    PAGINAS_POR_BUSQUEDA = 3
 
     # El boton de postular es un <span>, no un <button> ni un <a>: buscar solo
     # botones y enlaces era la razon por la que nunca se encontraba.
@@ -66,24 +66,26 @@ class ComputrabajoPlatform(BasePlatform):
 
     # ------------------------------------------------------------------ busqueda
 
-    def search(self, keyword: str) -> list[JobOffer]:
+    def search(self, keyword: str, conocidas: OfertasConocidas) -> list[JobOffer]:
         """Lee varias paginas de resultados.
 
         Con solo la primera pagina (20 ofertas) el bot agoto las busquedas en
         tres dias: cada ciclo revisaba las mismas 292 ofertas y no postulaba a
-        ninguna. Tres paginas dan 60 ofertas distintas por palabra clave.
+        ninguna. Ahora sigue hasta PAGINAS_MAXIMAS mientras aparezca algo nuevo.
         """
         base = f"{self.BASE_URL}/trabajo-de-{lectura.slug(keyword)}"
         ofertas: list[JobOffer] = []
         vistas: set[str] = set()
 
-        for numero in range(1, self.PAGINAS_POR_BUSQUEDA + 1):
+        numero = 1
+        while True:
             url = base if numero == 1 else f"{base}?p={numero}"
             logging.info("Buscando en Computrabajo: %s", url)
             nuevas = self._leer_pagina(url, vistas)
             ofertas.extend(nuevas)
-            if not nuevas:
-                break  # la pagina vino vacia o repetida: no hay mas resultados
+            if not self.seguir_paginando(numero, nuevas, conocidas):
+                break
+            numero += 1
 
         logging.info("Computrabajo: %s ofertas extraidas", len(ofertas))
         return ofertas

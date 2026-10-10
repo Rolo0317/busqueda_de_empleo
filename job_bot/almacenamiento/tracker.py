@@ -33,6 +33,12 @@ class ApplicationTracker(Protocol):
     def ofertas_pendientes(self, plataforma: str, min_score: int, limite: int) -> list[JobOffer]:
         ...
 
+    def urls_descartadas(self, huella: str, dias: int) -> set[str]:
+        ...
+
+    def registrar_descartes(self, descartes: list[tuple[str, str]], huella: str) -> None:
+        ...
+
 
 class ReglasDeRegistro:
     """Lo que no depende del almacen: estados, recomendaciones y notas."""
@@ -103,6 +109,13 @@ def crear_tracker(settings: Settings) -> ApplicationTracker:
 class MySqlApplicationTracker(ReglasDeRegistro):
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
+
+    # La memoria de descartes vive solo en Supabase; con MySQL se reevaluan.
+    def urls_descartadas(self, huella: str, dias: int) -> set[str]:
+        return set()
+
+    def registrar_descartes(self, descartes: list[tuple[str, str]], huella: str) -> None:
+        return None
 
     def get_seen_urls(self) -> set[str]:
         connection = self._connect()

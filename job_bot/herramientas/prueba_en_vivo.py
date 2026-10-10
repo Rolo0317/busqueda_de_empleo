@@ -60,17 +60,17 @@ def todas_caducadas(plataforma: MagnetoPlatform, ofertas: list[JobOffer]) -> boo
 
 def buscar_frescas(plataforma: MagnetoPlatform, tracker, settings, cuantas: int) -> list[JobOffer]:
     """Busca ofertas nuevas y descarta las que ya se trabajaron."""
-    from utilidades.url_utils import canonicalize_url
+    from postulacion.memoria_descartes import OfertasConocidas
 
-    vistas = {canonicalize_url(u) for u in tracker.get_seen_urls()}
+    vistas = OfertasConocidas(tracker.get_seen_urls())
     frescas: list[JobOffer] = []
 
     for palabra in settings.search_keywords:
         print(f"  buscando: {palabra}")
-        for oferta in plataforma.search(palabra):
-            if canonicalize_url(str(oferta.url)) in vistas:
+        for oferta in plataforma.search(palabra, vistas):
+            if str(oferta.url) in vistas:
                 continue
-            vistas.add(canonicalize_url(str(oferta.url)))
+            vistas.agregar(str(oferta.url))
             frescas.append(oferta)
             if len(frescas) >= cuantas:
                 return frescas

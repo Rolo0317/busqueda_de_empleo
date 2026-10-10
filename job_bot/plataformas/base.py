@@ -10,6 +10,7 @@ from playwright.sync_api import Page
 from navegador.navegador import Navegador
 from config import Settings
 from modelos.job_offer import JobOffer
+from postulacion.memoria_descartes import OfertasConocidas
 
 
 class BasePlatform(ABC):
@@ -21,6 +22,9 @@ class BasePlatform(ABC):
 
     nombre: ClassVar[str] = "Desconocida"
     url_inicial: ClassVar[str] = ""
+    # Tope de paginas por palabra clave. Se para antes si una pagina no trae
+    # nada nuevo: los resultados siguientes son mas viejos y ya se decidieron.
+    PAGINAS_MAXIMAS: ClassVar[int] = 5
 
     def __init__(self, navegador: Navegador, settings: Settings, tracker=None) -> None:
         self.navegador = navegador
@@ -62,8 +66,17 @@ class BasePlatform(ABC):
         except Exception as error:
             logging.debug("no se registro la pregunta: %s", str(error)[:60])
 
+    def seguir_paginando(self, pagina: int, nuevas: list[JobOffer], conocidas: OfertasConocidas) -> bool:
+        """Si vale la pena leer la pagina siguiente a `pagina`."""
+        if not nuevas:
+            return False  # pagina vacia o repetida: no hay mas resultados
+        if conocidas.todas_conocidas(nuevas):
+            logging.info("%s: la pagina %s ya era conocida; no se sigue paginando.", self.nombre, pagina)
+            return False
+        return pagina < self.PAGINAS_MAXIMAS
+
     @abstractmethod
-    def search(self, keyword: str) -> list[JobOffer]:
+    def search(self, keyword: str, conocidas: OfertasConocidas) -> list[JobOffer]:
         raise NotImplementedError
 
     @abstractmethod

@@ -5,6 +5,7 @@ from time import sleep
 from modelos.job_offer import JobOffer
 from plataformas.base import BasePlatform
 from postulacion.analyzer import OfferAnalyzer
+from postulacion.memoria_descartes import OfertasConocidas
 from postulacion.relevancia_cargo import Encaje, RelevanciaDelCargo
 from postulacion.zona import ciudad_lejana
 from almacenamiento.tracker import ApplicationTracker
@@ -29,8 +30,13 @@ class ApplicationSummary:
         # numero uno ("cargo no reconocido") paso semanas sin verse.
         self.motivos_descarte: Counter[str] = Counter()
         self.no_reconocidos: list[str] = []
+        # (url, motivo) de los descartes nuevos: se guardan en lote al final.
+        self.descartes: list[tuple[str, str]] = []
 
-    def registrar_descarte(self, motivo: str, cargo: str, reconocido: bool) -> None:
+    def registrar_descarte(self, url: str, motivo: str, cargo: str, reconocido: bool) -> None:
+        self.off_profile += 1
+        self.skipped += 1
+        self.descartes.append((url, motivo[:200]))
         self.motivos_descarte[motivo.split(":")[0]] += 1
         if not reconocido and len(self.no_reconocidos) < self.MUESTRA_NO_RECONOCIDOS:
             if cargo not in self.no_reconocidos:
@@ -86,9 +92,13 @@ class JobApplicant:
             raise KeyboardInterrupt("Terminado por el operador")
         return respuesta in ("s", "si", "y", "yes")
 
-    def apply_to_offers(self, offers: list[JobOffer]) -> ApplicationSummary:
+    def apply_to_offers(self, offers: list[JobOffer],
+                        conocidas: OfertasConocidas | None = None) -> ApplicationSummary:
+        """`conocidas` trae lo ya decidido (postuladas y descartes guardados);
+        sin ella solo se omiten las URLs que el tracker da por vistas."""
         summary = ApplicationSummary()
-        seen_urls = {canonicalize_url(url) for url in self.tracker.get_seen_urls()}
+        if conocidas is None:
+            conocidas = OfertasConocidas(self.tracker.get_seen_urls())
 
         for offer in offers:
             # El panel lanza corridas con un tope: sin este corte, el boton de
@@ -102,7 +112,7 @@ class JobApplicant:
             analysis = self.analyzer.analyze(offer)
             offer_url = canonicalize_url(str(offer.url))
 
-            if offer_url in seen_urls:
+            if offer_url in conocidas:
                 summary.skipped += 1
                 summary.duplicates += 1
                 # Van al resumen del ciclo: una linea por oferta ya vista llenaba
@@ -114,21 +124,17 @@ class JobApplicant:
             # automatico del filtro de la plataforma y ensucia el historial.
             encaje = self.relevancia.valorar(offer.title)
             if not encaje.vale_la_pena:
-                summary.skipped += 1
-                summary.off_profile += 1
-                summary.registrar_descarte(encaje.motivo, offer.title[:70],
+                summary.registrar_descarte(offer_url, encaje.motivo, offer.title[:70],
                                            reconocido=encaje.encaje is not Encaje.DESCONOCIDO)
                 logging.debug("Fuera del perfil | %s | %s", encaje.motivo, offer.title[:70])
-                seen_urls.add(offer_url)
+                conocidas.agregar(offer_url)
                 continue
 
             lejana = ciudad_lejana(offer, self.ciudad_base) if self.ciudad_base else None
             if lejana:
-                summary.skipped += 1
-                summary.off_profile += 1
-                summary.registrar_descarte("Fuera de zona", offer.title[:70], reconocido=True)
+                summary.registrar_descarte(offer_url, "Fuera de zona", offer.title[:70], reconocido=True)
                 logging.debug("Fuera de zona (%s, sin reubicacion) | %s", lejana, offer.title[:70])
-                seen_urls.add(offer_url)
+                conocidas.agregar(offer_url)
                 continue
 
             if analysis.score < self.min_match_score and not self.exhaustive:
@@ -166,7 +172,7 @@ class JobApplicant:
                     continue
                 status = plataforma.apply(offer)
                 self.tracker.record(offer, status, record_notes, analysis)
-                seen_urls.add(offer_url)
+                conocidas.agregar(offer_url)
                 if status == "aplicado":
                     summary.applied += 1
                 elif status == "no disponible":
@@ -175,7 +181,7 @@ class JobApplicant:
                 summary.errors += 1
                 logging.exception("Error postulando a %s", offer.url)
                 self.tracker.record(offer, "error", str(error), analysis)
-                seen_urls.add(offer_url)
+                conocidas.agregar(offer_url)
 
             sleep(self.wait_seconds)
 

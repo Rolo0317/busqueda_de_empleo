@@ -25,6 +25,16 @@ class SupabaseApplicationTracker(ReglasDeRegistro):
         })
         return {str(url) for url in filas or [] if url}
 
+    def urls_descartadas(self, huella: str, dias: int) -> set[str]:
+        filas = self.cliente.rpc("empleo_urls_descartadas", {"p_huella": huella, "p_dias": dias})
+        return {str(url) for url in filas or [] if url}
+
+    def registrar_descartes(self, descartes: list[tuple[str, str]], huella: str) -> None:
+        if descartes:
+            self.cliente.rpc("empleo_registrar_descartes", {"p_descartes": [
+                {"url": url, "motivo": motivo, "huella": huella} for url, motivo in descartes
+            ]})
+
     def record(self, offer: JobOffer, status: str, notes: str = "", analysis: OfferAnalysis | None = None) -> None:
         db_status = self._to_db_status(status)
         self.cliente.rpc("empleo_registrar_oferta", {

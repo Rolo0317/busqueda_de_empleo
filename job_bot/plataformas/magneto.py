@@ -24,6 +24,7 @@ from utilidades.url_utils import canonicalize_url
 from modelos.job_offer import JobOffer
 from plataformas import lectura_oferta as lectura
 from plataformas.base import BasePlatform
+from postulacion.memoria_descartes import OfertasConocidas
 from plataformas.cuestionario import CuestionarioMagneto, Pregunta
 from plataformas.login_magneto import LoginMagneto
 from respuestas.ai_answerer import FreeAiAnswerClient
@@ -65,7 +66,6 @@ class MagnetoPlatform(BasePlatform):
     MARCAS_ANONIMO = ("iniciar sesion", "crear cuenta", "registrate")
     TEXTO_MINIMO_PAGINA = 200
     INTENTOS_SESION = 15
-    PAGINAS_POR_BUSQUEDA = 3
     MS_ESPERA_PAGINA = 4000
     VUELTAS_MAXIMAS = 8
 
@@ -126,7 +126,7 @@ class MagnetoPlatform(BasePlatform):
 
     # ------------------------------------------------------------------ busqueda
 
-    def search(self, keyword: str) -> list[JobOffer]:
+    def search(self, keyword: str, conocidas: OfertasConocidas) -> list[JobOffer]:
         url = f"{self.BASE_URL}/co/trabajos/buscar/{lectura.slug(keyword)}"
         logging.info("Buscando en Magneto: %s", url)
         # Una busqueda que no carga no debe tumbar la corrida entera: se sigue
@@ -136,7 +136,7 @@ class MagnetoPlatform(BasePlatform):
 
         ofertas = self._leer_resultados(filtro=None)
         if ofertas:
-            return self._sumar_paginas_siguientes(ofertas)
+            return self._sumar_paginas_siguientes(ofertas, conocidas)
 
         logging.info("Busqueda por URL sin resultados. Usando pagina de ciudad para: %s", keyword)
         ciudad = lectura.slug(self.settings.magneto_city)
@@ -144,12 +144,14 @@ class MagnetoPlatform(BasePlatform):
             return []
         return self._leer_resultados(filtro=keyword)
 
-    def _sumar_paginas_siguientes(self, ofertas: list[JobOffer]) -> list[JobOffer]:
+    def _sumar_paginas_siguientes(self, ofertas: list[JobOffer], conocidas: OfertasConocidas) -> list[JobOffer]:
         """Magneto pagina en el navegador: la URL ?paginator[page]=2 cargada
         directamente devuelve la pagina 1, asi que hay que pulsar el enlace.
-        Antes solo se leia la primera pagina (auditoria del 09/10)."""
+        Sigue mientras aparezca algo nuevo, hasta PAGINAS_MAXIMAS."""
         vistas = {str(o.url) for o in ofertas}
-        for numero in range(2, self.PAGINAS_POR_BUSQUEDA + 1):
+        nuevas, numero = ofertas, 1
+        while self.seguir_paginando(numero, nuevas, conocidas):
+            numero += 1
             enlace = self.pagina.locator(f'a[href*="paginator[page]={numero}"]')
             if not enlace.count():
                 break
@@ -159,8 +161,6 @@ class MagnetoPlatform(BasePlatform):
             except PlaywrightTimeout:
                 break
             nuevas = [o for o in self._leer_resultados(filtro=None) if str(o.url) not in vistas]
-            if not nuevas:
-                break
             vistas.update(str(o.url) for o in nuevas)
             ofertas.extend(nuevas)
         logging.info("Magneto: %s ofertas en total para esta busqueda", len(ofertas))
