@@ -10,15 +10,16 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from time import sleep, time
 
-from browser.navegador import Navegador, NavegadorNoDisponible
+from navegador.navegador import Navegador, NavegadorNoDisponible
 from config import PerfilNoEncontrado, Settings, cargar_perfil, load_settings
-from platforms import registry
-from services.analyzer import OfferAnalyzer
-from services.applicant import ApplicationSummary, JobApplicant
-from services.relevancia_cargo import RelevanciaDelCargo
-from services.searcher import JobSearcher
-from services.tracker import ApplicationTracker, crear_tracker
+from plataformas import registry
+from postulacion.analyzer import OfferAnalyzer
+from postulacion.applicant import ApplicationSummary, JobApplicant
+from postulacion.relevancia_cargo import RelevanciaDelCargo
+from postulacion.searcher import JobSearcher
+from almacenamiento.tracker import ApplicationTracker, crear_tracker
 
+CARPETA_LOGS = Path(__file__).resolve().parent / "logs"
 CICLOS_ENTRE_REVISIONES_DE_SESION = 5
 # Una plataforma que perdio la sesion se reintenta, pero no mas de una vez por
 # hora: cada intento de Magneto manda un codigo al correo.
@@ -26,6 +27,7 @@ MINUTOS_ENTRE_REINTENTOS_DE_SESION = 60
 
 
 def configure_logging() -> None:
+    CARPETA_LOGS.mkdir(exist_ok=True)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(message)s",
@@ -33,7 +35,7 @@ def configure_logging() -> None:
         handlers=[
             logging.StreamHandler(),
             # Con rotacion: sin tope, bot.log llego a 17 MB en unos dias.
-            RotatingFileHandler(Path(__file__).with_name("bot.log"), encoding="utf-8",
+            RotatingFileHandler(CARPETA_LOGS / "bot.log", encoding="utf-8",
                                 maxBytes=5_000_000, backupCount=2),
         ],
     )

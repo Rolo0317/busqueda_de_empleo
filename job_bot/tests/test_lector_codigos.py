@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.lector_codigos import codigo_en_texto
+from utilidades.lector_codigos import codigo_en_texto
 
 CASOS = [
     # Texto real del correo de Magneto (09/10/2026).

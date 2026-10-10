@@ -9,7 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from services.criterio_situacional import elegir
+from respuestas.criterio_situacional import elegir
 
 # (pregunta, opciones, la opcion correcta)
 CASOS = [

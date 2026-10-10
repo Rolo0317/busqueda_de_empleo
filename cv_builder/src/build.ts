@@ -13,7 +13,7 @@ const RUTAS = {
   perfil: join(RAIZ, 'job_bot', 'candidate_profile.json'),
   css: join(RAIZ, 'cv_builder', 'static', 'cv.css'),
   cssAts: join(RAIZ, 'cv_builder', 'static', 'cv_ats.css'),
-  foto: join(RAIZ, 'foto_corporativa.jpeg'),
+  foto: join(RAIZ, 'cv_builder', 'static', 'foto_corporativa.jpeg'),
   // Versionada a proposito: Vercel la publica tal cual, porque alla no estan
   // el perfil privado ni el Chromium que generan el PDF.
   salida: join(RAIZ, 'sitio'),

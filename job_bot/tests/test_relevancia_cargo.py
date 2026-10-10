@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.relevancia_cargo import Encaje, RelevanciaDelCargo
+from postulacion.relevancia_cargo import Encaje, RelevanciaDelCargo
 
 CASOS = [
     # 3 de octubre: el bot postulo a un cupo reservado sin que el perfil aplique.

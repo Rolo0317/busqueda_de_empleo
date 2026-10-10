@@ -127,3 +127,6 @@ PRODUCT.md
 
 # Salida del build de Vercel (sitio + panel)
 publico/
+
+# Logs del bot (llevan respuestas enviadas, con telefono y correo)
+job_bot/logs/

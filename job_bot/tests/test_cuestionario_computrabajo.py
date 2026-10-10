@@ -12,7 +12,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from playwright.sync_api import sync_playwright
 
-from platforms.cuestionario_computrabajo import CuestionarioComputrabajo
+from plataformas.cuestionario_computrabajo import CuestionarioComputrabajo
 
 HTML = """
 <form style="height: 6000px">

@@ -11,7 +11,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 from playwright.sync_api import sync_playwright
 
-from platforms.cuestionario import CuestionarioMagneto
+from plataformas.cuestionario import CuestionarioMagneto
 
 HTML = """
 <div class="q"><div class="jobOfferQuestionnaire_question-title__x">¿Cuál es tu nivel de inglés?</div>

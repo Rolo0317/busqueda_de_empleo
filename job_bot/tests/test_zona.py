@@ -4,8 +4,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.job_offer import JobOffer
-from services.zona import ciudad_lejana
+from modelos.job_offer import JobOffer
+from postulacion.zona import ciudad_lejana
 
 
 def oferta(titulo: str, ciudad: str, descripcion: str = "") -> JobOffer:

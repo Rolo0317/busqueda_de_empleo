@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from models.job_offer import JobOffer
-from services.applicant import JobApplicant
+from modelos.job_offer import JobOffer
+from postulacion.applicant import JobApplicant
 
 
 class PlataformaFalsa:

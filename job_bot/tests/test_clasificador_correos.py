@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from services.clasificador_correos import Categoria, ClasificadorCorreos, Correo
+from utilidades.clasificador_correos import Categoria, ClasificadorCorreos, Correo
 
 CASOS = [
     (Correo("no-reply@pandape.com",

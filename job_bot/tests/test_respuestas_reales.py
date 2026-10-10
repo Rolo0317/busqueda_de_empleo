@@ -10,7 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-from services.question_answerer import CandidateQuestionAnswerer
+from respuestas.question_answerer import CandidateQuestionAnswerer
 
 # El perfil de ejemplo del repositorio, no el personal: asi las pruebas dan lo
 # mismo en cualquier maquina y no dependen de datos privados.

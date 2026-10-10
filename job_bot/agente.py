@@ -5,7 +5,7 @@ Magneto y Computrabajo iniciadas, y eso vive aqui. El panel solo deja una
 solicitud en Supabase; este agente la toma, abre el navegador si hace falta,
 lanza main.py con el tope pedido y va reportando el estado y la cola del log.
 
-    .venv\\Scripts\\python.exe agente.py      (o ..\\iniciar_agente.ps1)
+    .venv\\Scripts\\python.exe agente.py      (o ..\\scripts\\iniciar_agente.ps1)
 """
 from __future__ import annotations
 
@@ -24,11 +24,11 @@ from pathlib import Path
 import requests
 
 from config import Settings, load_settings
-from services.supabase_cliente import ClienteSupabase
+from almacenamiento.supabase_cliente import ClienteSupabase
 
 CARPETA_BOT = Path(__file__).resolve().parent
 RAIZ = CARPETA_BOT.parent
-SCRIPT_NAVEGADOR = RAIZ / "abrir_navegador_bot.ps1"
+SCRIPT_NAVEGADOR = RAIZ / "scripts" / "abrir_navegador_bot.ps1"
 
 SEGUNDOS_ENTRE_LATIDOS = 15
 SEGUNDOS_ENTRE_CONSULTAS = 5
