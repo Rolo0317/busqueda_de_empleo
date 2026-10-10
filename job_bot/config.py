@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     run_continuously: bool = Field(default=True, alias="RUN_CONTINUOUSLY")
     # Ritmo del bot continuo: tope de postulaciones por dia (0 sin tope) y
     # franja horaria local en la que postula [inicio, fin).
-    max_postulaciones_dia: int = Field(default=40, ge=0, alias="MAX_POSTULACIONES_DIA")
+    max_postulaciones_dia: int = Field(default=100, ge=0, alias="MAX_POSTULACIONES_DIA")
     hora_inicio_postulacion: int = Field(default=7, ge=0, le=23, alias="HORA_INICIO_POSTULACION")
     hora_fin_postulacion: int = Field(default=21, ge=1, le=24, alias="HORA_FIN_POSTULACION")
     cv_path: Path = Field(alias="CV_PATH")
