@@ -25,7 +25,8 @@ def avisar(titulo: str, texto: str) -> None:
     )
     try:
         subprocess.Popen(["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", guion],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         creationflags=subprocess.CREATE_NO_WINDOW)
     except OSError as error:
         logging.debug("No se pudo mostrar el aviso de Windows: %s", error)
 

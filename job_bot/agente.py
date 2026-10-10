@@ -21,19 +21,15 @@ from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
 
-import requests
-
 from config import Settings, load_settings
 from almacenamiento.supabase_cliente import ClienteSupabase
+from navegador.procesos_del_bot import NavegadorDelBot, hay_otro_bot_corriendo
 
 CARPETA_BOT = Path(__file__).resolve().parent
-RAIZ = CARPETA_BOT.parent
-SCRIPT_NAVEGADOR = RAIZ / "scripts" / "abrir_navegador_bot.ps1"
 
 SEGUNDOS_ENTRE_LATIDOS = 15
 SEGUNDOS_ENTRE_CONSULTAS = 5
 SEGUNDOS_ENTRE_REPORTES = 5
-SEGUNDOS_ESPERA_NAVEGADOR = 40
 LINEAS_DE_LOG_REPORTADAS = 60
 
 # main.py imprime esto al final de cada ciclo; de aqui sale el resumen del panel.
@@ -46,47 +42,6 @@ PATRON_RESUMEN = re.compile(
 class Corrida:
     id: int
     max_ofertas: int
-
-
-class NavegadorDelBot:
-    """El Edge del bot escuchando en el puerto de depuracion."""
-
-    def __init__(self, settings: Settings) -> None:
-        direccion = settings.edge_debugger_address or "127.0.0.1:9222"
-        self._url_version = f"http://{direccion}/json/version"
-
-    def listo(self) -> bool:
-        try:
-            return requests.get(self._url_version, timeout=3).ok
-        except requests.RequestException:
-            return False
-
-    def asegurar(self) -> bool:
-        if self.listo():
-            return True
-        logging.info("El navegador del bot no esta abierto: abriendolo...")
-        subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(SCRIPT_NAVEGADOR)],
-            cwd=str(RAIZ), check=False, capture_output=True,
-        )
-        limite = time.time() + SEGUNDOS_ESPERA_NAVEGADOR
-        while time.time() < limite:
-            if self.listo():
-                return True
-            time.sleep(2)
-        return False
-
-
-def hay_otro_bot_corriendo() -> bool:
-    """Dos bots sobre el mismo Edge se pisan y duplican postulaciones."""
-    consulta = (
-        "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
-        "Where-Object { $_.CommandLine -like '*main.py*' } | Measure-Object | "
-        "Select-Object -ExpandProperty Count"
-    )
-    salida = subprocess.run(["powershell", "-NoProfile", "-Command", consulta],
-                            capture_output=True, text=True, check=False).stdout.strip()
-    return salida.isdigit() and int(salida) > 0
 
 
 class EjecutorDelBot:

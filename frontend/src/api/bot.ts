@@ -42,3 +42,23 @@ export const cancelarCorrida = (id: number): Promise<void> =>
 
 export const corridaViva = (c: Corrida | undefined): boolean =>
   c?.estado === 'pending' || c?.estado === 'running';
+
+/** Por qué el panel debe llamar la atención sobre el bot continuo. */
+export type AlertaBot = 'supervisor_apagado' | 'bot_detenido' | 'sin_actividad';
+
+export interface EstadoBotContinuo {
+  maquina?: string;
+  latido?: string;
+  actividad?: string | null;
+  procesoVivo?: boolean;
+  reinicios?: number;
+  ultimoCiclo?: string | null;
+  pausado?: boolean;
+  alerta: AlertaBot | null;
+}
+
+export const estadoBotContinuo = (): Promise<EstadoBotContinuo> =>
+  llamar<EstadoBotContinuo>('empleo_estado_bot');
+
+export const pausarBotContinuo = (pausado: boolean): Promise<void> =>
+  llamar<void>('empleo_pausar_bot', { p_pausado: pausado });

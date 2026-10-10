@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { BotContinuo } from './components/BotContinuo';
 import { BotPanel } from './components/BotPanel';
 import { JobsTable } from './components/JobsTable';
 import { LoginForm } from './components/LoginForm';
@@ -43,6 +44,7 @@ export default function App() {
           <button type="button" onClick={() => void salir()} className="secundario">Salir</button>
         </div>
       </header>
+      <BotContinuo />
       <BotPanel onCorridaTerminada={alTerminarCorrida} />
       <Seguimiento version={version} />
       <Overview version={version} />
