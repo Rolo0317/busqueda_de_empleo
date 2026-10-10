@@ -52,6 +52,16 @@ class BasePlatform(ABC):
             return False
         return True
 
+    def registrar_pregunta(self, pregunta: str, respuesta: str, confianza: float) -> None:
+        """Guarda la pregunta y lo que se respondio (o por que se omitio), para
+        auditar despues. Un fallo al guardar no detiene la postulacion."""
+        if not self.tracker:
+            return
+        try:
+            self.tracker.record_question(pregunta[:500], respuesta[:200], confianza)
+        except Exception as error:
+            logging.debug("no se registro la pregunta: %s", str(error)[:60])
+
     @abstractmethod
     def search(self, keyword: str) -> list[JobOffer]:
         raise NotImplementedError

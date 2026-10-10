@@ -398,7 +398,7 @@ class MagnetoPlatform(BasePlatform):
             decision = self._decidir(pregunta)
             if not decision.should_answer or decision.value is None:
                 logging.info("  %s. omitida | %s | %s", indice, decision.reason, pregunta.texto[:90])
-                self._registrar(pregunta.texto, f"[OMITIDA] {decision.reason}", decision.confidence)
+                self.registrar_pregunta(pregunta.texto, f"[OMITIDA] {decision.reason}", decision.confidence)
                 continue
 
             valor = str(decision.value)
@@ -408,7 +408,7 @@ class MagnetoPlatform(BasePlatform):
                 puestas += 1
                 ya_contestadas.add(pregunta.texto)
                 logging.info("  %s. respondida | %s -> %s", indice, pregunta.texto[:60], valor[:60])
-                self._registrar(pregunta.texto, valor, decision.confidence)
+                self.registrar_pregunta(pregunta.texto, valor, decision.confidence)
                 self._pausa_de_revision()
             else:
                 logging.warning("  %s. sin poder responder | %s", indice, pregunta.texto[:90])
@@ -432,14 +432,6 @@ class MagnetoPlatform(BasePlatform):
             logging.info("  campo de texto libre: se usa respuesta redactada del perfil")
             return type(decision)(redactada, 0.85, "Redactada desde el perfil", True)
         return decision
-
-    def _registrar(self, pregunta: str, respuesta: str, confianza: float) -> None:
-        if not self.tracker:
-            return
-        try:
-            self.tracker.record_question(pregunta[:500], respuesta[:200], confianza)
-        except Exception as error:
-            logging.debug("no se registro la pregunta: %s", str(error)[:60])
 
     # --------------------------------------------------------- datos personales
 

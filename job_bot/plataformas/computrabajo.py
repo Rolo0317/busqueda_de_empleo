@@ -186,14 +186,16 @@ class ComputrabajoPlatform(BasePlatform):
         for indice, pregunta in enumerate(preguntas, 1):
             decision = self.question_answerer.answer(pregunta.texto, pregunta.opciones)
             if not decision.should_answer or decision.value is None:
-                logging.info("  %s. omitida | %s | opciones=%s",
-                             indice, pregunta.texto[:80], pregunta.opciones)
+                logging.info("  %s. omitida | %s | %s | opciones=%s",
+                             indice, decision.reason[:60], pregunta.texto[:80], pregunta.opciones)
+                self.registrar_pregunta(pregunta.texto, f"[OMITIDA] {decision.reason}", decision.confidence)
                 continue
             valor = str(decision.value)
             puesta = (cuestionario.elegir(pregunta, valor) if pregunta.tipo == "opciones"
                       else cuestionario.escribir(pregunta, valor))
             if puesta:
                 logging.info("  %s. respondida | %s -> %s", indice, pregunta.texto[:55], valor[:55])
+                self.registrar_pregunta(pregunta.texto, valor, decision.confidence)
             else:
                 logging.warning("  %s. sin poder responder | %s | opciones=%s",
                                 indice, pregunta.texto[:80], pregunta.opciones)

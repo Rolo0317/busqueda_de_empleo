@@ -11,6 +11,11 @@ from respuestas.eleccion_opciones import EleccionDeOpciones
 from respuestas.respuestas_locales import RespuestasLocales
 from postulacion.zona import AREAS
 
+# Por debajo de esto la respuesta no se envia. Los fallbacks ciegos (un "No"
+# sin dato, un texto generico, un "no aplica") quedan entre 0.45 y 0.55; lo que
+# sale de datos del perfil esta en 0.72 o mas.
+UMBRAL_CONFIANZA = 0.6
+
 
 @dataclass(frozen=True)
 class AnswerDecision:
@@ -29,6 +34,19 @@ class CandidateQuestionAnswerer:
         self.opciones = EleccionDeOpciones(self.profile)
 
     def answer(self, question: str, options: list[str]) -> AnswerDecision:
+        """La respuesta a una pregunta, solo si es lo bastante confiable.
+
+        Por debajo de UMBRAL_CONFIANZA la pregunta se omite: si era obligatoria,
+        el formulario no se envia. Una postulacion perdida cuesta menos que una
+        afirmacion falsa a nombre del candidato (auditoria del 10/10).
+        """
+        decision = self._decidir(question, options)
+        if decision.should_answer and decision.confidence < UMBRAL_CONFIANZA:
+            return AnswerDecision(None, decision.confidence,
+                                  f"Confianza baja ({decision.confidence:.2f}): {decision.reason}", False)
+        return decision
+
+    def _decidir(self, question: str, options: list[str]) -> AnswerDecision:
         raw_question = re.sub(r"\s+", " ", question or "").strip()
         normalized = self._normalize(question)
         normalized_options = [self._normalize(option) for option in options]
@@ -571,6 +589,16 @@ class CandidateQuestionAnswerer:
             preferences.extend([self._nivel_ingles(), "basico", "basic"])
         if self._has_any(question, ("modalidad",)):
             preferences.extend(["remoto", "hibrido", "presencial"])
+        if self._has_any(question, self.PREGUNTAN_NIVEL_ACADEMICO):
+            preferences.extend(self._niveles_academicos())
+
+        # "¿Cuantos meses de experiencia?" con rangos: se elige con los anos del
+        # perfil pasados a meses. Antes caia en la primera opcion: "Sin experiencia".
+        if "meses" in question and "experiencia" in question:
+            meses = self.profile.get("experience_years", {}).get("total", 0) * 12
+            por_meses = self._opcion_por_meses(options, meses)
+            if por_meses:
+                return AnswerDecision(por_meses, 0.8, f"Rango que contiene {meses:g} meses del perfil", True)
 
         # Antes de cualquier heuristica ciega: que el perfil decida.
         # La lista de preferencias incluia "sin experiencia" y "si", y por eso
@@ -585,15 +613,21 @@ class CandidateQuestionAnswerer:
         if self._pide_tiempo_de_experiencia(question) and anios_de(question, self.profile) is None:
             return self._skip("Piden anos en una tecnologia que el perfil no registra")
 
-        preferences.extend(["no aplica", "ninguna", "ninguno", "no"])
-        answer = self._match_option(options, normalized_options, preferences, "Fallback de seleccion multiple")
-        if answer.should_answer:
-            return AnswerDecision(answer.value, 0.5, answer.reason, True)
+        # Las preferencias de arriba salen de datos del perfil (salario, ciudad,
+        # ingles, modalidad): si una coincide, es una respuesta fundada.
+        if preferences:
+            fundada = self._match_option(options, normalized_options, preferences, "Opcion segun dato del perfil")
+            if fundada.should_answer:
+                return AnswerDecision(fundada.value, 0.75, fundada.reason, True)
 
-        first_option = next((option for option in options if option and option.strip()), None)
-        if first_option:
-            return AnswerDecision(first_option, 0.35, "Fallback: primera opcion visible", True)
-        return self._skip("Opciones vacias")
+        # Un "no / no aplica" generico queda por debajo del umbral de confianza:
+        # se omite. Antes, sin coincidencia, se marcaba la primera opcion visible
+        # y salian cosas como "Actualmente trabajo en el Grupo Bolivar" (10/10).
+        generica = self._match_option(options, normalized_options, ["no aplica", "ninguna", "ninguno", "no"],
+                                      "Fallback generico de seleccion multiple")
+        if generica.should_answer:
+            return AnswerDecision(generica.value, 0.5, generica.reason, True)
+        return self._skip("Ninguna opcion se puede fundar en el perfil")
 
     def _fallback_text_answer(self) -> AnswerDecision:
         texts = self.profile.get("short_texts", {})
@@ -673,6 +707,33 @@ class CandidateQuestionAnswerer:
         if not monto:
             return []
         return [str(monto), f"{monto:,}".replace(",", "."), f"{monto:,}"]
+
+    PREGUNTAN_NIVEL_ACADEMICO = ("nivel academico", "nivel de estudios", "nivel educativo",
+                                 "ultimo nivel", "estudios culminados", "nivel de formacion")
+    # Del nivel mas alto al mas bajo: se ofrece primero el mas alto que tenga el perfil.
+    NIVELES_ACADEMICOS = (("doctor", "doctorado"), ("magister", "maestria"), ("especializ", "especializacion"),
+                          ("profesional", "profesional"), ("ingenier", "profesional"),
+                          ("tecnologo", "tecnologo"), ("tecnico", "tecnico"), ("bachiller", "bachiller"))
+
+    def _niveles_academicos(self) -> list[str]:
+        titulos = [self._normalize(e.get("degree", "")) for e in self.profile.get("education", [])]
+        return [nivel for raiz, nivel in self.NIVELES_ACADEMICOS
+                if any(t.startswith(raiz) for t in titulos)]
+
+    @staticmethod
+    def _opcion_por_meses(options: list[str], meses: float) -> str | None:
+        """La opcion cuyo rango contiene los meses; o el "mas de N" mas alto que se cumpla."""
+        mejor, tope_mejor = None, -1.0
+        for opcion in options:
+            plano = unicodedata.normalize("NFKD", opcion).encode("ascii", "ignore").decode().lower()
+            numeros = [float(n) for n in re.findall(r"\d+(?:[.,]\d+)?", plano.replace(",", "."))]
+            if not numeros:
+                continue
+            if len(numeros) >= 2 and numeros[0] <= meses <= numeros[1]:
+                return opcion
+            if ("mas de" in plano or "+" in plano or "o mas" in plano) and meses > numeros[0] > tope_mejor:
+                mejor, tope_mejor = opcion, numeros[0]
+        return mejor
 
     def _nivel_ingles(self) -> str:
         return self._normalize(self.profile.get("languages", {}).get("english", "")) or "basico"

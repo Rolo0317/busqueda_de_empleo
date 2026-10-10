@@ -119,7 +119,7 @@ class FreeAiAnswerClient:
         profile_json = json.dumps(profile, ensure_ascii=False, indent=2)
         return (
             f"Eres {profile.get('name', 'el candidato')}, {profile.get('title', 'profesional')} "
-            f"con {profile.get('experience_years', {}).get('total', 0)} anos de experiencia. "
+            f"con {profile.get('experience_years', {}).get('total', 0)} años de experiencia. "
             "Responde esta pregunta de un formulario de empleo en maximo 3 oraciones, en espanol, "
             "en primera persona, de forma profesional y concisa, basandote solo en el perfil real.\n\n"
             f"Perfil real:\n{profile_json}\n\n"

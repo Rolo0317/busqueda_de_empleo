@@ -81,6 +81,7 @@ class RespuestasLocales:
             (self._es_validacion_ia, self._decir_validacion_ia),
             (self._es_agentes_ia, self._decir_agentes_ia),
             (self._es_vinculo_empresa, self._decir_vinculo_empresa),
+            (self._es_motores_bd, self._decir_motores_bd),
             (self._es_fecha, self._decir_fecha),
             (self._es_proyecto_ui, self._decir_proyecto_ui),
             (self._es_anios, self._decir_anios),
@@ -300,6 +301,26 @@ class RespuestasLocales:
             if palabras and all(p in t for p in palabras[:2]):
                 return "Si, he trabajado en esa empresa."
         return "No, no he trabajado en esa empresa ni en sus filiales."
+
+    # Motores que se reconocen en experience_years, con su nombre comercial.
+    MOTORES_BD = {"mysql": "MySQL", "postgresql": "PostgreSQL", "sql_server": "SQL Server",
+                  "oracle": "Oracle", "mongodb": "MongoDB", "redis": "Redis"}
+
+    @staticmethod
+    def _es_motores_bd(t: str) -> bool:
+        return (any(m in t for m in ("motor", "gestor", "manejador"))
+                and ("base de datos" in t or "bases de datos" in t))
+
+    def _decir_motores_bd(self, t: str) -> str:
+        """Los motores del perfil con sus años, del más usado al menos (10/10:
+        antes caía en un texto genérico que no nombraba ninguno)."""
+        usados = sorted(((nombre, self.anios.get(clave, 0)) for clave, nombre in self.MOTORES_BD.items()
+                         if self.anios.get(clave, 0)), key=lambda par: -par[1])
+        if not usados:
+            return f"Trabajo con SQL desde hace {self.anios.get('sql', 0)} años."
+        partes = [f"{nombre} ({anios:g} año{'s' if anios != 1 else ''})" for nombre, anios in usados]
+        lista = partes[0] if len(partes) == 1 else ", ".join(partes[:-1]) + " y " + partes[-1]
+        return f"He trabajado con {lista}."
 
     @staticmethod
     def _es_fecha(t: str) -> bool:

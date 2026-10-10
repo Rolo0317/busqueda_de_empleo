@@ -139,6 +139,20 @@ CASOS = [
      lambda r: r == "A2", "A2"),
     ("¿Qué experiencia tiene manejando flujos de integración continua y despliegue continuo (CI/CD)?", [],
      lambda r: r.lower().startswith("no tengo experiencia en"), "un no honesto sobre CI/CD"),
+    # Auditoria del 10/10: respuestas reales enviadas con confianza baja.
+    # Sin dato en el perfil se omite: antes se marcaba la primera opcion visible.
+    ("¿Cuál de las siguientes opciones describe mejor tu experiencia?",
+     ["Actualmente trabajo en una empresa del Grupo Bolívar", "Trabajé en el Grupo Bolívar",
+      "Nunca he trabajado en el Grupo Bolívar"],
+     None, "omitida: ninguna opcion se funda en el perfil"),
+    ("¿Cuántos meses de experiencia tienes?", ["Sin experiencia", "1 a 6 meses", "Más de 12 meses"],
+     lambda r: r == "Más de 12 meses", "los anos del perfil pasados a meses"),
+    ("¿Cuál es tu último nivel académico culminado?", ["Bachiller", "Técnico", "Tecnólogo", "Profesional"],
+     lambda r: r == "Tecnólogo", "el nivel del titulo del perfil"),
+    ("¿Actualmente se encuentra laborando?", [],
+     None, "omitida: el texto generico no responde la pregunta"),
+    ("¿Con qué motores de bases de datos has trabajado?", [],
+     lambda r: "MySQL" in r and "PostgreSQL" in r, "los motores del perfil con sus anos"),
     # Auditoria del 09/10: con una tecnologia fuera del perfil caia a los anos totales.
     ("¿Cuántos años de experiencia tienes en Java?", [],
      lambda r: r.strip() == "0", "0 (Java no esta en el perfil)"),
