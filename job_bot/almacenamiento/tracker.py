@@ -4,6 +4,7 @@ Dos almacenes con la misma interfaz: Supabase (el que lee el panel web) y la
 base MySQL local de antes. `crear_tracker` elige segun DB_BACKEND; el resto del
 bot solo conoce el protocolo ApplicationTracker.
 """
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, Protocol
 
 from config import Settings
@@ -37,6 +38,9 @@ class ApplicationTracker(Protocol):
         ...
 
     def registrar_descartes(self, descartes: list[tuple[str, str]], huella: str) -> None:
+        ...
+
+    def postuladas_desde(self, desde: datetime) -> list[dict]:
         ...
 
 
@@ -116,6 +120,10 @@ class MySqlApplicationTracker(ReglasDeRegistro):
 
     def registrar_descartes(self, descartes: list[tuple[str, str]], huella: str) -> None:
         return None
+
+    # Sin historial, MySQL no aplica el tope diario ni detecta repetidas.
+    def postuladas_desde(self, desde: datetime) -> list[dict]:
+        return []
 
     def get_seen_urls(self) -> set[str]:
         connection = self._connect()

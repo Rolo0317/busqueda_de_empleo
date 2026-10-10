@@ -5,6 +5,8 @@ hace Postgres dentro de empleo_registrar_oferta, en un solo viaje de red.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 from config import Settings
 from modelos.job_offer import JobOffer
 from postulacion.analyzer import OfferAnalysis
@@ -34,6 +36,9 @@ class SupabaseApplicationTracker(ReglasDeRegistro):
             self.cliente.rpc("empleo_registrar_descartes", {"p_descartes": [
                 {"url": url, "motivo": motivo, "huella": huella} for url, motivo in descartes
             ]})
+
+    def postuladas_desde(self, desde: datetime) -> list[dict]:
+        return self.cliente.rpc("empleo_postuladas_desde", {"p_desde": desde.isoformat()}) or []
 
     def record(self, offer: JobOffer, status: str, notes: str = "", analysis: OfferAnalysis | None = None) -> None:
         db_status = self._to_db_status(status)

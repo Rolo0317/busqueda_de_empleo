@@ -6,6 +6,7 @@ de busqueda y postulacion hasta que se le pide parar.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from time import sleep, time
@@ -17,6 +18,7 @@ from postulacion.analyzer import OfferAnalyzer
 from postulacion.applicant import ApplicationSummary, JobApplicant
 from postulacion.memoria_descartes import DIAS_DE_MEMORIA, OfertasConocidas, huella_de_filtros
 from postulacion.relevancia_cargo import RelevanciaDelCargo
+from postulacion.ritmo_de_postulacion import DIAS_DE_HISTORIAL, HistorialDePostulaciones, RitmoDePostulacion
 from postulacion.searcher import JobSearcher
 from almacenamiento.tracker import ApplicationTracker, crear_tracker
 from seguimiento.seguimiento_correo import crear_seguimiento
@@ -53,8 +55,30 @@ def ciudad_base(perfil: dict) -> str:
     return str(perfil.get("city", ""))
 
 
+def cargar_historial(tracker: ApplicationTracker, ahora: datetime) -> HistorialDePostulaciones:
+    """Sin historial el ciclo sigue, aunque sin tope diario ni control de repetidas."""
+    try:
+        return HistorialDePostulaciones(tracker.postuladas_desde(ahora - timedelta(days=DIAS_DE_HISTORIAL)))
+    except Exception as error:
+        logging.warning("No se leyo el historial de postulaciones: %s", str(error)[:90])
+        return HistorialDePostulaciones([])
+
+
+def tope_del_ciclo(max_offers: int, cupo_de_hoy: int | None) -> int:
+    """El menor entre el tope de la corrida y lo que queda del dia (0 es sin tope)."""
+    topes = [t for t in (max_offers or None, cupo_de_hoy) if t is not None]
+    return min(topes) if topes else 0
+
+
 def run_cycle(settings: Settings, perfil: dict, platforms: dict,
-              tracker: ApplicationTracker) -> ApplicationSummary:
+              tracker: ApplicationTracker, ritmo: RitmoDePostulacion) -> ApplicationSummary:
+    ahora = datetime.now().astimezone()
+    historial = cargar_historial(tracker, ahora)
+    cupo = ritmo.cupo_de_hoy(historial, ahora)
+    if cupo == 0:
+        logging.info("Tope diario de %s postulaciones alcanzado: no se busca hasta manana.", ritmo.tope_diario)
+        return ApplicationSummary()
+
     applicant = JobApplicant(
         platforms=platforms,
         tracker=tracker,
@@ -63,12 +87,13 @@ def run_cycle(settings: Settings, perfil: dict, platforms: dict,
         min_match_score=settings.min_match_score,
         supervised=settings.supervised_apply,
         exhaustive=settings.exhaustive_mode,
-        max_applications=settings.max_offers,
+        max_applications=tope_del_ciclo(settings.max_offers, cupo),
         relevancia=RelevanciaDelCargo(
             perfil.get("cargos"),
             acepta_vacantes_de_inclusion=bool(perfil.get("safe_booleans", {}).get("has_disability")),
         ),
         ciudad_base=ciudad_base(perfil),
+        historial=historial,
     )
     huella = huella_de_filtros(perfil, ciudad_base(perfil))
     conocidas = OfertasConocidas(tracker.get_seen_urls() | tracker.urls_descartadas(huella, DIAS_DE_MEMORIA))
@@ -85,9 +110,9 @@ def run_cycle(settings: Settings, perfil: dict, platforms: dict,
 def log_summary(summary: ApplicationSummary) -> None:
     logging.info(
         "RESUMEN CICLO | revisadas=%s | aplicadas=%s | errores=%s | omitidas=%s "
-        "(ya vistas=%s, fuera del perfil=%s, score bajo=%s)",
+        "(ya vistas=%s, fuera del perfil=%s, score bajo=%s, repetidas=%s)",
         summary.reviewed, summary.applied, summary.errors, summary.skipped,
-        summary.duplicates, summary.off_profile, summary.low_score,
+        summary.duplicates, summary.off_profile, summary.low_score, summary.repetidas,
     )
     for motivo, veces in summary.motivos_descarte.most_common(6):
         logging.info("  descarte | %4d | %s", veces, motivo)
@@ -176,6 +201,27 @@ class ControlDeSesiones:
         logging.info("Plataformas activas: %s", ", ".join(self.activas) or "ninguna")
 
 
+def ciclo_de_postulacion(settings: Settings, perfil: dict, sesiones: ControlDeSesiones,
+                         tracker: ApplicationTracker, ritmo: RitmoDePostulacion, ciclos: int) -> None:
+    # Una revision de sesion fallida no puede terminar la corrida:
+    # asi murio el bot tras cinco ciclos, con el navegador aun vivo.
+    try:
+        if ciclos % CICLOS_ENTRE_REVISIONES_DE_SESION == 0:
+            sesiones.revisar_todas()
+        else:
+            sesiones.reintentar_caidas()
+    except Exception as error:
+        logging.warning("No se pudo revisar la sesion: %s", str(error)[:90])
+
+    try:
+        if sesiones.activas:
+            log_summary(run_cycle(settings, perfil, sesiones.activas, tracker, ritmo))
+        else:
+            logging.warning("Ninguna plataforma con sesion en este ciclo.")
+    except Exception:
+        logging.exception("Error en el ciclo #%d", ciclos)
+
+
 def main() -> None:
     configure_logging()
     logging.info("=" * 78)
@@ -192,6 +238,8 @@ def main() -> None:
     # Solo el tracker de Supabase tiene cliente: con MySQL no hay donde guardar eventos.
     seguimiento = crear_seguimiento(settings.magneto_email, settings.correo_codigos_clave_app,
                                     getattr(tracker, "cliente", None))
+    ritmo = RitmoDePostulacion(settings.max_postulaciones_dia, settings.hora_inicio_postulacion,
+                               settings.hora_fin_postulacion)
     ciclos = 0
 
     try:
@@ -209,23 +257,13 @@ def main() -> None:
                 logging.info("-" * 78)
                 logging.info("Ciclo #%d", ciclos)
 
-                # Una revision de sesion fallida no puede terminar la corrida:
-                # asi murio el bot tras cinco ciclos, con el navegador aun vivo.
-                try:
-                    if ciclos % CICLOS_ENTRE_REVISIONES_DE_SESION == 0:
-                        sesiones.revisar_todas()
-                    else:
-                        sesiones.reintentar_caidas()
-                except Exception as error:
-                    logging.warning("No se pudo revisar la sesion: %s", str(error)[:90])
-
-                try:
-                    if sesiones.activas:
-                        log_summary(run_cycle(settings, perfil, sesiones.activas, tracker))
-                    else:
-                        logging.warning("Ninguna plataforma con sesion en este ciclo.")
-                except Exception:
-                    logging.exception("Error en el ciclo #%d", ciclos)
+                # El horario solo frena al bot continuo: una corrida pedida
+                # desde el panel ya es una orden explicita de postular.
+                if settings.run_continuously and not ritmo.dentro_de_horario(datetime.now()):
+                    logging.info("Fuera del horario de postulacion (%s): solo se revisa el correo.",
+                                 ritmo.descripcion_horario)
+                else:
+                    ciclo_de_postulacion(settings, perfil, sesiones, tracker, ritmo, ciclos)
 
                 # El seguimiento del correo es accesorio: nunca tumba un ciclo.
                 if seguimiento:

@@ -1,11 +1,13 @@
 import logging
 from collections import Counter
+from datetime import datetime
 from time import sleep
 
 from modelos.job_offer import JobOffer
 from plataformas.base import BasePlatform
 from postulacion.analyzer import OfferAnalyzer
 from postulacion.memoria_descartes import OfertasConocidas
+from postulacion.ritmo_de_postulacion import HistorialDePostulaciones
 from postulacion.relevancia_cargo import Encaje, RelevanciaDelCargo
 from postulacion.zona import ciudad_lejana
 from almacenamiento.tracker import ApplicationTracker
@@ -26,6 +28,8 @@ class ApplicationSummary:
         self.duplicates = 0
         self.off_profile = 0
         self.low_score = 0
+        # Misma empresa y cargo que una postulacion previa, con otra URL.
+        self.repetidas = 0
         # Por que se descarto cada oferta fuera del perfil. Sin esto, el motivo
         # numero uno ("cargo no reconocido") paso semanas sin verse.
         self.motivos_descarte: Counter[str] = Counter()
@@ -56,6 +60,7 @@ class JobApplicant:
         max_applications: int = 0,
         relevancia: RelevanciaDelCargo | None = None,
         ciudad_base: str = "",
+        historial: HistorialDePostulaciones | None = None,
     ) -> None:
         self.platforms = platforms
         self.tracker = tracker
@@ -68,6 +73,7 @@ class JobApplicant:
         self.relevancia = relevancia or RelevanciaDelCargo()
         # Ciudad de la que el candidato no se muda; vacia si acepta reubicarse.
         self.ciudad_base = ciudad_base
+        self.historial = historial
 
     def _confirmar(self, offer: JobOffer, analysis) -> bool:
         """Pide aprobacion antes de enviar. Una postulacion no se puede retirar.
@@ -152,6 +158,16 @@ class JobApplicant:
                     analysis.score, self.min_match_score, offer.title,
                 )
 
+            previa = self.historial.plataforma_previa(offer) if self.historial else None
+            if previa:
+                summary.skipped += 1
+                summary.repetidas += 1
+                # Queda como descartada: es un estado final y no se vuelve a evaluar.
+                self.tracker.record(offer, "descartado", f"Repetida: ya postulada en {previa}", analysis)
+                conocidas.agregar(offer_url)
+                logging.info("Repetida (ya postulada en %s): %s | %s", previa, offer.title[:60], offer.company[:40])
+                continue
+
             record_notes = analysis.notes
             if analysis.score < self.min_match_score:
                 record_notes = (
@@ -175,6 +191,8 @@ class JobApplicant:
                 conocidas.agregar(offer_url)
                 if status == "aplicado":
                     summary.applied += 1
+                    if self.historial:
+                        self.historial.registrar(offer, datetime.now().astimezone())
                 elif status == "no disponible":
                     summary.skipped += 1
             except Exception as error:
